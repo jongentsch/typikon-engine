@@ -214,10 +214,18 @@ fn emit_rule_match(
             decision: decision_id.clone(),
         });
     }
+    let mut seen_authorities = BTreeSet::new();
+    let authority = rule
+        .authority
+        .iter()
+        .chain(candidate.into_iter().flat_map(|value| &value.authority))
+        .filter(|value| seen_authorities.insert(value.as_str()))
+        .cloned()
+        .collect();
     decisions.push(Decision {
         id: decision_id,
         rule: rule.id.clone(),
-        authority: rule.authority.clone(),
+        authority,
         observance: candidate.map(|observance| observance.id.clone()),
     });
     Ok(())

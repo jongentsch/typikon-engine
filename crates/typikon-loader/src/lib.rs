@@ -491,6 +491,16 @@ fn validate_service_shapes(pack: &LoadedPack) -> Result<(), LoaderError> {
 
 fn validate_observance_dates(pack: &LoadedPack) -> Result<(), LoaderError> {
     for sourced in pack.observances.values() {
+        for authority in &sourced.value.authority {
+            if !pack.authorities.contains_key(authority) {
+                return Err(LoaderError::UnknownReference {
+                    path: sourced.source.clone(),
+                    owner: sourced.value.id.clone(),
+                    kind: "authority",
+                    id: authority.clone(),
+                });
+            }
+        }
         if let Some(date) = &sourced.value.date {
             let max_day = match date.fixed.month {
                 2 => 29,

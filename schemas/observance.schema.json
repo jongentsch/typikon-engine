@@ -26,6 +26,11 @@
       }
     },
     "rank": { "$ref": "#/$defs/id" },
+    "authority": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
     "properties": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/scalar" }

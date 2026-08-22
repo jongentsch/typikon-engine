@@ -81,6 +81,8 @@ pub struct ObservanceDefinition {
     pub date: Option<ObservanceDate>,
     pub rank: String,
     #[serde(default)]
+    pub authority: Vec<String>,
+    #[serde(default)]
     pub properties: BTreeMap<String, Value>,
 }
 

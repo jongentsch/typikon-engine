@@ -55,6 +55,8 @@ date:
     month: 7
     day: 26
 rank: six-stichera
+authority:
+  - synthetic-observation
 properties:
   has_glory: true
   glory_tone: tone_6
@@ -127,6 +129,16 @@ kind: authoritative
             .as_bytes()
             .to_vec(),
         ),
+        (
+            "authorities/observation.yaml".to_owned(),
+            r"schema: typikon.authority/v0.1
+id: synthetic-observation
+title: Synthetic dated observation
+kind: observed_behavior
+"
+            .as_bytes()
+            .to_vec(),
+        ),
     ]);
     load_pack(&MemoryResource::new(files)).unwrap()
 }
@@ -162,6 +174,10 @@ fn synthetic_pack_compiles_a_schema_valid_plan() {
     assert_eq!(plan.sections[0].items[0].count, Some(6));
     assert_eq!(plan.sections[0].items[1].count, Some(4));
     assert_eq!(plan.decisions[0].rule, "ordinary-rule");
+    assert_eq!(
+        plan.decisions[0].authority,
+        ["synthetic-authority", "synthetic-observation"]
+    );
 }
 
 #[test]
