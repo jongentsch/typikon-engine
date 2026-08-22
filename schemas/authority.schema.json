@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://typikon.dev/schema/authority/v0.1",
-  "title": "Typikon rule authority",
+  "title": "Typikon evidence authority",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "id", "title", "kind"],
@@ -9,10 +9,21 @@
     "schema": { "const": "typikon.authority/v0.1" },
     "id": { "$ref": "#/$defs/id" },
     "title": { "type": "string", "minLength": 1 },
+    "category": { "enum": ["source", "scoped_claim", "dated_witness"] },
     "kind": { "enum": ["authoritative", "observed_behavior"] },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "claim": { "type": "string", "minLength": 1 },
     "publisher": { "type": "string", "minLength": 1 },
     "locator": {
       "type": "object",
+      "properties": {
+        "liturgical_date": { "type": "string", "format": "date" }
+      },
       "additionalProperties": { "type": "string" }
     },
     "reference": {
@@ -25,6 +36,42 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "category": { "const": "scoped_claim" } },
+        "required": ["category"]
+      },
+      "then": { "required": ["sources", "claim"] },
+      "else": {
+        "not": {
+          "anyOf": [
+            { "required": ["sources"] },
+            { "required": ["claim"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "category": { "enum": ["source", "dated_witness"] } },
+        "required": ["category"]
+      },
+      "then": { "required": ["reference"] }
+    },
+    {
+      "if": {
+        "properties": { "category": { "const": "dated_witness" } },
+        "required": ["category"]
+      },
+      "then": {
+        "properties": {
+          "locator": { "required": ["liturgical_date"] }
+        },
+        "required": ["locator"]
+      }
+    }
+  ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[a-z0-9_-]*[a-z0-9])?$" }
   }

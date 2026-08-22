@@ -7,7 +7,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use thiserror::Error;
 use typikon_schema::{
-    AuthorityDefinition, ObservanceDefinition, PackDefinition, RuleDefinition, ServiceDefinition,
+    AuthorityCategory, AuthorityDefinition, ObservanceDefinition, PackDefinition, RuleDefinition,
+    ServiceDefinition,
 };
 
 const PACK_JSON_SCHEMA: &str = include_str!("../../../schemas/pack.schema.json");
@@ -457,8 +458,44 @@ where
 
 fn validate_references(pack: &LoadedPack) -> Result<(), LoaderError> {
     validate_service_shapes(pack)?;
+    validate_authority_graph(pack)?;
     validate_observance_dates(pack)?;
     validate_rule_references(pack)
+}
+
+fn validate_authority_graph(pack: &LoadedPack) -> Result<(), LoaderError> {
+    for sourced in pack.authorities.values() {
+        let authority = &sourced.value;
+        for source_id in &authority.sources {
+            if source_id == &authority.id {
+                return Err(LoaderError::Schema {
+                    path: sourced.source.clone(),
+                    kind: "authority",
+                    message: format!("scoped claim '{}' cannot cite itself", authority.id),
+                });
+            }
+            let source =
+                pack.authorities
+                    .get(source_id)
+                    .ok_or_else(|| LoaderError::UnknownReference {
+                        path: sourced.source.clone(),
+                        owner: authority.id.clone(),
+                        kind: "authority source",
+                        id: source_id.clone(),
+                    })?;
+            if source.value.category != AuthorityCategory::Source {
+                return Err(LoaderError::Schema {
+                    path: sourced.source.clone(),
+                    kind: "authority",
+                    message: format!(
+                        "scoped claim '{}' must reference a source authority; '{}' is {:?}",
+                        authority.id, source_id, source.value.category
+                    ),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_service_shapes(pack: &LoadedPack) -> Result<(), LoaderError> {
@@ -646,5 +683,44 @@ mod tests {
             let actual = schema["properties"]["schema"]["const"].as_str();
             assert_eq!(actual, Some(expected));
         }
+    }
+
+    #[test]
+    fn authority_categories_enforce_distinct_evidence_shapes() {
+        let source = serde_json::json!({
+            "schema": AUTHORITY_SCHEMA,
+            "id": "source",
+            "title": "Source",
+            "category": "source",
+            "kind": "authoritative",
+            "reference": { "url": "https://example.test/source" }
+        });
+        validate_value(SchemaKind::Authority, "source", &source).unwrap();
+
+        let claim = serde_json::json!({
+            "schema": AUTHORITY_SCHEMA,
+            "id": "claim",
+            "title": "Claim",
+            "category": "scoped_claim",
+            "kind": "authoritative",
+            "sources": ["source"],
+            "claim": "A claim with explicit scope."
+        });
+        validate_value(SchemaKind::Authority, "claim", &claim).unwrap();
+
+        let witness = serde_json::json!({
+            "schema": AUTHORITY_SCHEMA,
+            "id": "witness",
+            "title": "Witness",
+            "category": "dated_witness",
+            "kind": "observed_behavior",
+            "locator": { "liturgical_date": "2026-07-26" },
+            "reference": { "url": "https://example.test/witness" }
+        });
+        validate_value(SchemaKind::Authority, "witness", &witness).unwrap();
+
+        let mut missing_date = witness;
+        missing_date["locator"] = serde_json::json!({ "service": "Vespers" });
+        assert!(validate_value(SchemaKind::Authority, "witness", &missing_date).is_err());
     }
 }

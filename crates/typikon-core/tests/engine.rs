@@ -122,9 +122,26 @@ authority:
         (
             "authorities/source.yaml".to_owned(),
             r"schema: typikon.authority/v0.1
-id: synthetic-authority
-title: Synthetic test authority
+id: synthetic-source
+title: Synthetic source publication
+category: source
 kind: authoritative
+reference:
+  url: https://example.test/source
+"
+            .as_bytes()
+            .to_vec(),
+        ),
+        (
+            "authorities/claim.yaml".to_owned(),
+            r"schema: typikon.authority/v0.1
+id: synthetic-authority
+title: Synthetic scoped claim
+category: scoped_claim
+kind: authoritative
+sources:
+  - synthetic-source
+claim: The synthetic arrangement applies in the fixture context.
 "
             .as_bytes()
             .to_vec(),
@@ -134,7 +151,12 @@ kind: authoritative
             r"schema: typikon.authority/v0.1
 id: synthetic-observation
 title: Synthetic dated observation
+category: dated_witness
 kind: observed_behavior
+locator:
+  liturgical_date: 2026-07-26
+reference:
+  url: https://example.test/witness
 "
             .as_bytes()
             .to_vec(),

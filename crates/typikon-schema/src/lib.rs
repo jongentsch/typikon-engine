@@ -176,13 +176,28 @@ pub struct AuthorityDefinition {
     pub schema: String,
     pub id: String,
     pub title: String,
+    #[serde(default)]
+    pub category: AuthorityCategory,
     pub kind: AuthorityKind,
+    #[serde(default)]
+    pub sources: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub publisher: Option<String>,
     #[serde(default)]
     pub locator: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reference: Option<AuthorityReference>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthorityCategory {
+    #[default]
+    Source,
+    ScopedClaim,
+    DatedWitness,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
