@@ -33,9 +33,9 @@ enum Command {
         date: String,
         #[arg(long)]
         service: String,
-        /// Tradition-defined tone value supplied by the caller in this spike.
+        /// Optional assertion checked against the calculated tradition tone.
         #[arg(long)]
-        tone: String,
+        tone: Option<String>,
         #[arg(long, default_value = "ordinary")]
         phase: String,
         /// Explicit context observance ID; repeat for multiple observances.

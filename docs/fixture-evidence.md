@@ -68,3 +68,11 @@ as distinct rank classes:
 The fixture rank assignments are grounded in the dated service orders. They
 remain engineering interpretations of OCA publications, not ecclesiastical
 approval of this experimental pack.
+
+## Calendar and tone cross-check
+
+The engine now calculates Pascha and the Octoechos ordinal rather than accepting
+the fixture tone as input. The resulting modes—GOARCH grave and plagal fourth,
+and OCA Tones 3 and 5—match all four dated witnesses. Their golden plans record
+the Pascha date, tone anchor, elapsed weeks, ordinal, pack-mapped tone, and
+fixed-calendar projection as separate derivations.

@@ -6,18 +6,69 @@
   "request": {
     "civil_date": "2023-08-26",
     "service": "great_vespers",
-    "tone": "tone_3",
     "phase": "ordinary",
     "observances": ["pimen-great"]
   },
   "day": {
     "liturgical_date": "2023-08-27",
+    "fixed_date": "2023-08-27",
+    "fixed_calendar": "revised_julian",
+    "pascha": "2023-04-16",
     "weekday": "sunday",
     "tone": "tone_3",
     "phase": "ordinary"
   },
+  "derivations": [
+    {
+      "id": "derivation-0001",
+      "component": "liturgical_date",
+      "method": "service_day_offset",
+      "inputs": { "civil_date": "2023-08-26", "offset_days": 1 },
+      "output": "2023-08-27"
+    },
+    {
+      "id": "derivation-0002",
+      "component": "fixed_date",
+      "method": "calendar_projection",
+      "inputs": { "calendar": "revised_julian", "liturgical_date": "2023-08-27" },
+      "output": "2023-08-27"
+    },
+    {
+      "id": "derivation-0003",
+      "component": "pascha",
+      "method": "orthodox_julian_computus",
+      "inputs": { "year": 2023 },
+      "output": "2023-04-16"
+    },
+    {
+      "id": "derivation-0004",
+      "component": "weekday",
+      "method": "proleptic_gregorian_weekday",
+      "inputs": { "liturgical_date": "2023-08-27" },
+      "output": "sunday"
+    },
+    {
+      "id": "derivation-0005",
+      "component": "phase",
+      "method": "caller_supplied",
+      "inputs": {},
+      "output": "ordinary"
+    },
+    {
+      "id": "derivation-0006",
+      "component": "tone",
+      "method": "octoechos_sunday_after_pascha",
+      "inputs": { "anchor": "2023-04-23", "ordinal": 3, "weeks_from_anchor": 18 },
+      "output": "tone_3"
+    }
+  ],
   "observances": [
-    { "id": "pimen-great", "name": "Venerable Pimen the Great", "rank": "lesser" }
+    {
+      "id": "pimen-great",
+      "name": "Venerable Pimen the Great",
+      "rank": "lesser",
+      "selection_derivation": "derivation-0002"
+    }
   ],
   "sections": [
     {

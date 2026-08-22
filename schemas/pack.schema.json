@@ -13,10 +13,25 @@
     "calendar": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fixed", "paschalion"],
+      "required": ["fixed", "paschalion", "tone_cycle"],
       "properties": {
-        "fixed": { "$ref": "#/$defs/id" },
-        "paschalion": { "$ref": "#/$defs/id" }
+        "fixed": { "enum": ["gregorian", "julian", "revised_julian"] },
+        "paschalion": { "enum": ["orthodox_julian"] },
+        "tone_cycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["system", "tones"],
+          "properties": {
+            "system": { "const": "octoechos" },
+            "tones": {
+              "type": "array",
+              "minItems": 8,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/id" }
+            }
+          }
+        }
       }
     },
     "definitions": {

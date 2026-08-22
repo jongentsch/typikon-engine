@@ -31,8 +31,11 @@ id: test
 name: Test
 version: 0.1.0
 calendar:
-  fixed: gregorian
-  paschalion: orthodox
+  fixed: revised_julian
+  paschalion: orthodox_julian
+  tone_cycle:
+    system: octoechos
+    tones: [tone_1, tone_2, tone_3, tone_4, tone_5, tone_6, tone_7, tone_8]
 definitions:
   services: services/
   observances: observances/

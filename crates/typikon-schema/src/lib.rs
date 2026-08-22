@@ -26,8 +26,36 @@ pub struct PackDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct CalendarDefinition {
-    pub fixed: String,
-    pub paschalion: String,
+    pub fixed: FixedCalendar,
+    pub paschalion: Paschalion,
+    pub tone_cycle: ToneCycleDefinition,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FixedCalendar {
+    Gregorian,
+    Julian,
+    RevisedJulian,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Paschalion {
+    OrthodoxJulian,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ToneCycleDefinition {
+    pub system: ToneCycleSystem,
+    pub tones: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ToneCycleSystem {
+    Octoechos,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -218,7 +246,8 @@ pub struct AuthorityReference {
 pub struct CompileServiceRequest {
     pub civil_date: String,
     pub service: String,
-    pub tone: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tone: Option<String>,
     #[serde(default = "ordinary_phase")]
     pub phase: String,
     #[serde(default)]
@@ -238,6 +267,7 @@ pub struct Plan {
     pub pack: PlanPack,
     pub request: CompileServiceRequest,
     pub day: LiturgicalDay,
+    pub derivations: Vec<PlanDerivation>,
     pub observances: Vec<PlanObservance>,
     pub sections: Vec<PlanSection>,
     pub decisions: Vec<Decision>,
@@ -261,6 +291,9 @@ pub struct PlanPack {
 #[serde(deny_unknown_fields)]
 pub struct LiturgicalDay {
     pub liturgical_date: String,
+    pub fixed_date: String,
+    pub fixed_calendar: FixedCalendar,
+    pub pascha: String,
     pub weekday: String,
     pub tone: String,
     pub phase: String,
@@ -272,6 +305,18 @@ pub struct PlanObservance {
     pub id: String,
     pub name: String,
     pub rank: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_derivation: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PlanDerivation {
+    pub id: String,
+    pub component: String,
+    pub method: String,
+    pub inputs: BTreeMap<String, Value>,
+    pub output: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

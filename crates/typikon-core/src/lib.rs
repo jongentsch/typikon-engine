@@ -1,15 +1,22 @@
 //! Pure, deterministic rule matching and semantic plan assembly.
 
+pub mod calendar;
+
 use std::collections::{BTreeMap, BTreeSet};
 
+use calendar::{
+    CalendarDate, CalendarError, ToneComputation, octoechos_tone, orthodox_pascha,
+    project_fixed_date,
+};
 use chrono::{Datelike, Duration, NaiveDate};
 use serde_json::Value;
 use thiserror::Error;
 use typikon_loader::LoadedPack;
 use typikon_schema::{
-    CompileServiceRequest, DayPredicate, Decision, LiturgicalDay, ObservanceDefinition,
-    ObservancePredicate, PLAN_SCHEMA, Plan, PlanItem, PlanObservance, PlanPack, PlanSection,
-    PlanStatus, RuleDefinition, RulePredicate, ServiceDefinition, SlotCardinality,
+    CalendarDefinition, CompileServiceRequest, DayPredicate, Decision, LiturgicalDay,
+    ObservanceDefinition, ObservancePredicate, PLAN_SCHEMA, Plan, PlanDerivation, PlanItem,
+    PlanObservance, PlanPack, PlanSection, PlanStatus, RuleDefinition, RulePredicate,
+    ServiceDefinition, SlotCardinality,
 };
 
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -37,16 +44,23 @@ impl Engine {
     /// Returns an error for invalid request context, absent matches, unresolved
     /// variables, or ambiguous/missing exclusive slots.
     pub fn compile_service(&self, mut request: CompileServiceRequest) -> Result<Plan, EngineError> {
-        validate_context_identifier("tone", &request.tone)?;
+        if let Some(tone) = &request.tone {
+            validate_context_identifier("tone", tone)?;
+        }
         validate_context_identifier("phase", &request.phase)?;
         let service = self
             .pack
             .services
             .get(&request.service)
             .ok_or_else(|| EngineError::UnknownService(request.service.clone()))?;
-        let (liturgical_date, day) = build_day(&request, service.value.liturgical_day_offset)?;
+        let (fixed_date, day, derivations) = build_day(
+            &request,
+            service.value.liturgical_day_offset,
+            &self.pack.pack.value.calendar,
+        )?;
 
-        let observance_ids = self.select_observances(&request, liturgical_date)?;
+        let automatic_observances = request.observances.is_empty();
+        let observance_ids = self.select_observances(&request, &fixed_date)?;
         request.observances.clone_from(&observance_ids);
         let observances = observance_ids
             .iter()
@@ -79,12 +93,15 @@ impl Engine {
             },
             request,
             day,
+            derivations,
             observances: observances
                 .into_iter()
                 .map(|observance| PlanObservance {
                     id: observance.id.clone(),
                     name: observance.name.clone(),
                     rank: observance.rank.clone(),
+                    selection_derivation: automatic_observances
+                        .then(|| "derivation-0002".to_owned()),
                 })
                 .collect(),
             sections,
@@ -133,7 +150,7 @@ impl Engine {
     fn select_observances(
         &self,
         request: &CompileServiceRequest,
-        liturgical_date: NaiveDate,
+        fixed_date: &CalendarDate,
     ) -> Result<Vec<String>, EngineError> {
         if request.observances.is_empty() {
             return Ok(self
@@ -142,8 +159,8 @@ impl Engine {
                 .iter()
                 .filter(|(_, sourced)| {
                     sourced.value.date.as_ref().is_some_and(|date| {
-                        u32::from(date.fixed.month) == liturgical_date.month()
-                            && u32::from(date.fixed.day) == liturgical_date.day()
+                        u32::from(date.fixed.month) == fixed_date.month
+                            && u32::from(date.fixed.day) == fixed_date.day
                     })
                 })
                 .map(|(id, _)| id.clone())
@@ -269,7 +286,8 @@ fn resolve_material(
 fn build_day(
     request: &CompileServiceRequest,
     liturgical_day_offset: i32,
-) -> Result<(NaiveDate, LiturgicalDay), EngineError> {
+    calendar: &CalendarDefinition,
+) -> Result<(CalendarDate, LiturgicalDay, Vec<PlanDerivation>), EngineError> {
     if !has_iso_date_shape(&request.civil_date) {
         return Err(EngineError::InvalidCivilDate {
             value: request.civil_date.clone(),
@@ -286,13 +304,112 @@ fn build_day(
     let date = civil_date
         .checked_add_signed(Duration::days(i64::from(liturgical_day_offset)))
         .ok_or(EngineError::DateOverflow)?;
+    let fixed_date = project_fixed_date(date, calendar.fixed)?;
+    let pascha = orthodox_pascha(date.year())?;
+    let tone = octoechos_tone(date, &calendar.tone_cycle.tones)?;
+    if let Some(requested) = &request.tone
+        && requested != &tone.tone
+    {
+        return Err(EngineError::ToneMismatch {
+            requested: requested.clone(),
+            calculated: tone.tone,
+        });
+    }
     let day = LiturgicalDay {
         liturgical_date: date.format("%Y-%m-%d").to_string(),
+        fixed_date: fixed_date.to_string(),
+        fixed_calendar: calendar.fixed,
+        pascha: pascha.to_string(),
         weekday: weekday_name(date).to_owned(),
-        tone: request.tone.clone(),
+        tone: tone.tone.clone(),
         phase: request.phase.clone(),
     };
-    Ok((date, day))
+    let derivations =
+        build_day_derivations(request, liturgical_day_offset, calendar, &day, &tone, date);
+    Ok((fixed_date, day, derivations))
+}
+
+fn build_day_derivations(
+    request: &CompileServiceRequest,
+    liturgical_day_offset: i32,
+    calendar: &CalendarDefinition,
+    day: &LiturgicalDay,
+    tone: &ToneComputation,
+    date: NaiveDate,
+) -> Vec<PlanDerivation> {
+    let derivations = vec![
+        PlanDerivation {
+            id: "derivation-0001".to_owned(),
+            component: "liturgical_date".to_owned(),
+            method: "service_day_offset".to_owned(),
+            inputs: BTreeMap::from([
+                (
+                    "civil_date".to_owned(),
+                    Value::String(request.civil_date.clone()),
+                ),
+                (
+                    "offset_days".to_owned(),
+                    Value::Number(liturgical_day_offset.into()),
+                ),
+            ]),
+            output: Value::String(day.liturgical_date.clone()),
+        },
+        PlanDerivation {
+            id: "derivation-0002".to_owned(),
+            component: "fixed_date".to_owned(),
+            method: "calendar_projection".to_owned(),
+            inputs: BTreeMap::from([
+                (
+                    "calendar".to_owned(),
+                    serde_json::to_value(calendar.fixed).expect("calendar enum always serializes"),
+                ),
+                (
+                    "liturgical_date".to_owned(),
+                    Value::String(day.liturgical_date.clone()),
+                ),
+            ]),
+            output: Value::String(day.fixed_date.clone()),
+        },
+        PlanDerivation {
+            id: "derivation-0003".to_owned(),
+            component: "pascha".to_owned(),
+            method: "orthodox_julian_computus".to_owned(),
+            inputs: BTreeMap::from([("year".to_owned(), Value::Number(date.year().into()))]),
+            output: Value::String(day.pascha.clone()),
+        },
+        PlanDerivation {
+            id: "derivation-0004".to_owned(),
+            component: "weekday".to_owned(),
+            method: "proleptic_gregorian_weekday".to_owned(),
+            inputs: BTreeMap::from([(
+                "liturgical_date".to_owned(),
+                Value::String(day.liturgical_date.clone()),
+            )]),
+            output: Value::String(day.weekday.clone()),
+        },
+        PlanDerivation {
+            id: "derivation-0005".to_owned(),
+            component: "phase".to_owned(),
+            method: "caller_supplied".to_owned(),
+            inputs: BTreeMap::new(),
+            output: Value::String(day.phase.clone()),
+        },
+        PlanDerivation {
+            id: "derivation-0006".to_owned(),
+            component: "tone".to_owned(),
+            method: "octoechos_sunday_after_pascha".to_owned(),
+            inputs: BTreeMap::from([
+                ("anchor".to_owned(), Value::String(tone.anchor.to_string())),
+                ("ordinal".to_owned(), Value::Number(tone.ordinal.into())),
+                (
+                    "weeks_from_anchor".to_owned(),
+                    Value::Number(tone.weeks_from_anchor.into()),
+                ),
+            ]),
+            output: Value::String(day.tone.clone()),
+        },
+    ];
+    derivations
 }
 
 fn validate_context_identifier(field: &'static str, value: &str) -> Result<(), EngineError> {
@@ -362,6 +479,13 @@ pub enum EngineError {
     InvalidContextValue { field: &'static str, value: String },
     #[error("liturgical date overflowed the supported date range")]
     DateOverflow,
+    #[error("requested tone '{requested}' does not match calculated tone '{calculated}'")]
+    ToneMismatch {
+        requested: String,
+        calculated: String,
+    },
+    #[error(transparent)]
+    Calendar(#[from] CalendarError),
     #[error("no rules matched service '{service}' for liturgical date {date}")]
     NoMatchingRules { service: String, date: String },
     #[error("rule '{rule}' uses unknown variable '{variable}'")]

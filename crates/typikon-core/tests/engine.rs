@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 
 use typikon_core::{Engine, EngineError};
 use typikon_loader::{MemoryResource, SchemaKind, Sourced, load_pack, validate_value};
-use typikon_schema::{CompileServiceRequest, ObservancePredicate, OneOrMany, RulePredicate};
+use typikon_schema::{
+    CompileServiceRequest, FixedCalendar, ObservancePredicate, OneOrMany, RulePredicate,
+};
 
 // Complete inline YAML documents keep the self-contained fixture reviewable.
 #[allow(clippy::too_many_lines)]
@@ -15,8 +17,19 @@ id: synthetic
 name: Synthetic engine test pack
 version: 0.1.0
 calendar:
-  fixed: gregorian
-  paschalion: orthodox
+  fixed: revised_julian
+  paschalion: orthodox_julian
+  tone_cycle:
+    system: octoechos
+    tones:
+      - tone_1
+      - tone_2
+      - tone_3
+      - tone_4
+      - tone_5
+      - tone_6
+      - tone_7
+      - tone_8
 definitions:
   services: services/
   observances: observances/
@@ -169,11 +182,11 @@ fn engine() -> Engine {
     Engine::new(synthetic_pack())
 }
 
-fn request(date: &str, tone: &str, observances: &[&str]) -> CompileServiceRequest {
+fn request(date: &str, observances: &[&str]) -> CompileServiceRequest {
     CompileServiceRequest {
         civil_date: date.to_owned(),
         service: "great_vespers".to_owned(),
-        tone: tone.to_owned(),
+        tone: None,
         phase: "ordinary".to_owned(),
         observances: observances
             .iter()
@@ -185,7 +198,7 @@ fn request(date: &str, tone: &str, observances: &[&str]) -> CompileServiceReques
 #[test]
 fn synthetic_pack_compiles_a_schema_valid_plan() {
     let plan = engine()
-        .compile_service(request("2026-07-25", "tone_7", &[]))
+        .compile_service(request("2026-07-25", &[]))
         .unwrap();
     let value = serde_json::to_value(&plan).unwrap();
     validate_value(SchemaKind::Plan, "synthetic plan", &value).unwrap();
@@ -193,6 +206,9 @@ fn synthetic_pack_compiles_a_schema_valid_plan() {
     assert_eq!(plan.pack.id, "synthetic");
     assert_eq!(plan.day.liturgical_date, "2026-07-26");
     assert_eq!(plan.day.weekday, "sunday");
+    assert_eq!(plan.day.tone, "tone_7");
+    assert_eq!(plan.day.pascha, "2026-04-12");
+    assert_eq!(plan.derivations[5].component, "tone");
     assert_eq!(plan.sections[0].items[0].count, Some(6));
     assert_eq!(plan.sections[0].items[1].count, Some(4));
     assert_eq!(plan.decisions[0].rule, "ordinary-rule");
@@ -205,12 +221,8 @@ fn synthetic_pack_compiles_a_schema_valid_plan() {
 #[test]
 fn compilation_is_byte_for_byte_deterministic() {
     let engine = engine();
-    let first = engine
-        .compile_service(request("2026-07-25", "tone_7", &[]))
-        .unwrap();
-    let second = engine
-        .compile_service(request("2026-07-25", "tone_7", &[]))
-        .unwrap();
+    let first = engine.compile_service(request("2026-07-25", &[])).unwrap();
+    let second = engine.compile_service(request("2026-07-25", &[])).unwrap();
 
     assert_eq!(
         serde_json::to_vec(&first).unwrap(),
@@ -232,7 +244,7 @@ fn conflicting_exclusive_emissions_report_ambiguity() {
     );
 
     let error = Engine::new(pack)
-        .compile_service(request("2026-07-25", "tone_7", &[]))
+        .compile_service(request("2026-07-25", &[]))
         .unwrap_err();
     assert!(matches!(error, EngineError::AmbiguousSlot { .. }));
     assert!(error.to_string().contains("lord_i_call:glory"));
@@ -240,18 +252,55 @@ fn conflicting_exclusive_emissions_report_ambiguity() {
 
 #[test]
 fn invalid_context_values_cannot_escape_the_plan_contract() {
-    let error = engine()
-        .compile_service(request("2026-07-25", "Tone seven", &[]))
-        .unwrap_err();
+    let mut invalid_tone = request("2026-07-25", &[]);
+    invalid_tone.tone = Some("Tone seven".to_owned());
+    let error = engine().compile_service(invalid_tone).unwrap_err();
     assert!(matches!(
         error,
         EngineError::InvalidContextValue { field: "tone", .. }
     ));
 
+    let mut wrong_tone = request("2026-07-25", &[]);
+    wrong_tone.tone = Some("tone_6".to_owned());
+    let error = engine().compile_service(wrong_tone).unwrap_err();
+    assert!(matches!(error, EngineError::ToneMismatch { .. }));
+
     let error = engine()
-        .compile_service(request("2026-7-25", "tone_7", &[]))
+        .compile_service(request("2026-7-25", &[]))
         .unwrap_err();
     assert!(matches!(error, EngineError::InvalidCivilDate { .. }));
+}
+
+#[test]
+fn old_calendar_projection_selects_the_fixed_observance() {
+    let mut pack = synthetic_pack();
+    pack.pack.value.calendar.fixed = FixedCalendar::Julian;
+    let fixed = &mut pack
+        .observances
+        .get_mut("primary-context")
+        .unwrap()
+        .value
+        .date
+        .as_mut()
+        .unwrap()
+        .fixed;
+    fixed.month = 2;
+    fixed.day = 29;
+
+    let plan = Engine::new(pack)
+        .compile_service(request("2100-03-13", &[]))
+        .unwrap();
+    let value = serde_json::to_value(&plan).unwrap();
+    validate_value(SchemaKind::Plan, "Old Calendar leap-day plan", &value).unwrap();
+
+    assert_eq!(plan.day.liturgical_date, "2100-03-14");
+    assert_eq!(plan.day.fixed_date, "2100-02-29");
+    assert_eq!(plan.day.fixed_calendar, FixedCalendar::Julian);
+    assert_eq!(plan.observances[0].id, "primary-context");
+    assert_eq!(
+        plan.observances[0].selection_derivation.as_deref(),
+        Some("derivation-0002")
+    );
 }
 
 #[test]
@@ -268,7 +317,6 @@ fn unless_observance_checks_the_whole_selected_context() {
     let error = Engine::new(pack)
         .compile_service(request(
             "2026-07-25",
-            "tone_7",
             &["primary-context", "blocking-context"],
         ))
         .unwrap_err();

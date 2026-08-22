@@ -21,6 +21,11 @@ Rules contain equality predicates and emissions. Values in emissions may be
 literal scalars or exact variable references. Arbitrary expressions, scripts,
 callbacks, and magic numeric priorities are unsupported.
 
+Calendar configuration uses closed enums for algorithms but keeps the eight
+tone names in pack vocabulary. Compiled plans expose ordered component
+derivations rather than hiding calendar conversion, Pascha, weekday, tone, or
+caller-supplied phase behind a single opaque result.
+
 The `observance.properties` object is an escape hatch for evidence-led pack
 experimentation. A property should graduate into a first-class concept only
 after multiple real fixtures establish shared semantics.

@@ -30,8 +30,7 @@ cargo run -p typikon-cli -- validate ../typikon-goarch
 cargo run -p typikon-cli -- compile-service \
   --pack ../typikon-goarch \
   --date 2026-07-25 \
-  --service great_vespers \
-  --tone grave
+  --service great_vespers
 ```
 
 The OCA pack contains two dated fixtures grounded in official service orders.
@@ -41,9 +40,11 @@ The calendar selects the matching observance automatically:
 cargo run -p typikon-cli -- compile-service \
   --pack ../typikon-oca \
   --date 2023-08-26 \
-  --service great_vespers \
-  --tone tone_3
+  --service great_vespers
 ```
+
+The engine calculates Orthodox Pascha and the ordinary Octoechos tone from the
+date. `--tone` is optional and acts only as an assertion against that result.
 
 Run the complete verification suite with:
 
@@ -76,7 +77,9 @@ target separately from the standalone suite.
 
 The core receives a validated in-memory definition model. It neither reads the
 filesystem nor fetches the network. See [architecture](docs/architecture.md),
-[schema philosophy](docs/schema-philosophy.md), and [fixture evidence](docs/fixture-evidence.md).
+[calendar model](docs/calendar-model.md),
+[schema philosophy](docs/schema-philosophy.md), and
+[fixture evidence](docs/fixture-evidence.md).
 
 ## License
 

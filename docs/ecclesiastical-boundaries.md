@@ -23,6 +23,12 @@ supports the resulting arrangement only for its stated date; it does not by
 itself establish the reusable claim or explain calculations from the fixed,
 weekly, Paschal, or other cycles.
 
+Calendar-system selection belongs to the pack, not to a jurisdiction branch in
+Rust. The engine supports Gregorian, Revised Julian, and Julian fixed-date
+projection independently from its Julian-based Orthodox Paschalion. This makes
+Old Calendar calculation possible without asserting that every OCA or GOARCH
+community uses the same fixed calendar.
+
 The evaluator currently rejects ambiguity. Future models should represent
 explicit supersession, local overrides, and review-required choices only when
 real cases establish their semantics.

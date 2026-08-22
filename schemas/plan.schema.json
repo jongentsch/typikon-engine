@@ -4,7 +4,7 @@
   "title": "Compiled Typikon plan",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "engine_version", "status", "pack", "request", "day", "observances", "sections", "decisions"],
+  "required": ["schema", "engine_version", "status", "pack", "request", "day", "derivations", "observances", "sections", "decisions"],
   "properties": {
     "schema": { "const": "typikon.plan/v0.1" },
     "engine_version": { "type": "string", "minLength": 1 },
@@ -21,7 +21,7 @@
     "request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["civil_date", "service", "tone", "phase", "observances"],
+      "required": ["civil_date", "service", "phase", "observances"],
       "properties": {
         "civil_date": { "type": "string", "format": "date" },
         "service": { "$ref": "#/$defs/id" },
@@ -33,12 +33,36 @@
     "day": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["liturgical_date", "weekday", "tone", "phase"],
+      "required": ["liturgical_date", "fixed_date", "fixed_calendar", "pascha", "weekday", "tone", "phase"],
       "properties": {
         "liturgical_date": { "type": "string", "format": "date" },
+        "fixed_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])$"
+        },
+        "fixed_calendar": { "enum": ["gregorian", "julian", "revised_julian"] },
+        "pascha": { "type": "string", "format": "date" },
         "weekday": { "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] },
         "tone": { "$ref": "#/$defs/id" },
         "phase": { "$ref": "#/$defs/id" }
+      }
+    },
+    "derivations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "component", "method", "inputs", "output"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "component": { "$ref": "#/$defs/id" },
+          "method": { "$ref": "#/$defs/id" },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/scalar" }
+          },
+          "output": { "$ref": "#/$defs/scalar" }
+        }
       }
     },
     "observances": {
@@ -50,7 +74,8 @@
         "properties": {
           "id": { "$ref": "#/$defs/id" },
           "name": { "type": "string" },
-          "rank": { "$ref": "#/$defs/id" }
+          "rank": { "$ref": "#/$defs/id" },
+          "selection_derivation": { "$ref": "#/$defs/id" }
         }
       }
     },

@@ -26,11 +26,11 @@ fn engine(name: &str) -> Engine {
     Engine::new(load_pack(&resource).unwrap())
 }
 
-fn request(date: &str, tone: &str, observances: &[&str]) -> CompileServiceRequest {
+fn request(date: &str, observances: &[&str]) -> CompileServiceRequest {
     CompileServiceRequest {
         civil_date: date.to_owned(),
         service: "great_vespers".to_owned(),
-        tone: tone.to_owned(),
+        tone: None,
         phase: "ordinary".to_owned(),
         observances: observances
             .iter()
@@ -49,7 +49,7 @@ fn assert_golden(plan: &typikon_schema::Plan, expected: &str) {
 #[test]
 fn goarch_dcs_paraskevi_case_matches_observed_plan() {
     let plan = engine("typikon-goarch")
-        .compile_service(request("2026-07-25", "grave", &[]))
+        .compile_service(request("2026-07-25", &[]))
         .unwrap();
 
     assert_golden(&plan, include_str!("golden/goarch-2026-07-25-vespers.json"));
@@ -63,7 +63,7 @@ fn goarch_dcs_paraskevi_case_matches_observed_plan() {
 #[test]
 fn goarch_dcs_stephen_case_matches_observed_plan() {
     let plan = engine("typikon-goarch")
-        .compile_service(request("2026-08-01", "plagal_fourth", &[]))
+        .compile_service(request("2026-08-01", &[]))
         .unwrap();
 
     assert_golden(&plan, include_str!("golden/goarch-2026-08-01-vespers.json"));
@@ -77,7 +77,7 @@ fn goarch_dcs_stephen_case_matches_observed_plan() {
 #[test]
 fn oca_pimen_case_matches_published_seven_plus_three_case() {
     let plan = engine("typikon-oca")
-        .compile_service(request("2023-08-26", "tone_3", &[]))
+        .compile_service(request("2023-08-26", &[]))
         .unwrap();
 
     assert_golden(&plan, include_str!("golden/oca-2023-08-26-vespers.json"));
@@ -91,7 +91,7 @@ fn oca_pimen_case_matches_published_seven_plus_three_case() {
 #[test]
 fn oca_archangel_michael_case_matches_published_six_plus_four_case() {
     let plan = engine("typikon-oca")
-        .compile_service(request("2026-09-05", "tone_5", &[]))
+        .compile_service(request("2026-09-05", &[]))
         .unwrap();
 
     assert_golden(&plan, include_str!("golden/oca-2026-09-05-vespers.json"));
@@ -105,10 +105,10 @@ fn oca_archangel_michael_case_matches_published_six_plus_four_case() {
 #[test]
 fn both_traditions_use_the_same_engine_vocabulary() {
     let goarch = engine("typikon-goarch")
-        .compile_service(request("2026-07-25", "grave", &[]))
+        .compile_service(request("2026-07-25", &[]))
         .unwrap();
     let oca = engine("typikon-oca")
-        .compile_service(request("2026-09-05", "tone_5", &[]))
+        .compile_service(request("2026-09-05", &[]))
         .unwrap();
 
     assert_eq!(goarch.sections[0].id, oca.sections[0].id);
