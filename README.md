@@ -77,9 +77,15 @@ target separately from the standalone suite.
 - `typikon-core`: pure, deterministic matching and plan assembly.
 - `typikon-cli`: filesystem-backed development harness.
 
+`typikon-core::Engine::compile_service_json` is the versioned, deterministic
+UTF-8 JSON boundary intended for non-Rust wrappers. Requests identify
+`typikon.request/v0.1`; results identify `typikon.plan/v0.1` and are validated
+before being returned.
+
 The core receives a validated in-memory definition model. It neither reads the
 filesystem nor fetches the network. See [architecture](docs/architecture.md),
 [calendar model](docs/calendar-model.md),
+[interoperability](docs/interoperability.md),
 [schema philosophy](docs/schema-philosophy.md), and
 [fixture evidence](docs/fixture-evidence.md).
 

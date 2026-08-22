@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 use serde_json::json;
 use typikon_core::Engine;
 use typikon_loader::{DirectoryResource, SchemaKind, load_pack, validate_value};
-use typikon_schema::CompileServiceRequest;
+use typikon_schema::{CompileServiceRequest, REQUEST_SCHEMA};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -87,6 +87,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             let resource = DirectoryResource::new(pack)?;
             let engine = Engine::new(load_pack(&resource)?);
             let plan = engine.compile_service(CompileServiceRequest {
+                schema: REQUEST_SCHEMA.to_owned(),
                 civil_date: date,
                 service,
                 tone,

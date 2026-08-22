@@ -21,8 +21,9 @@
     "request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["civil_date", "service", "observances"],
+      "required": ["schema", "civil_date", "service", "observances"],
       "properties": {
+        "schema": { "const": "typikon.request/v0.1" },
         "civil_date": { "type": "string", "format": "date" },
         "service": { "$ref": "#/$defs/id" },
         "tone": { "$ref": "#/$defs/id" },

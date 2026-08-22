@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use typikon_core::Engine;
 use typikon_loader::{DirectoryResource, SchemaKind, load_pack, validate_value};
-use typikon_schema::CompileServiceRequest;
+use typikon_schema::{CompileServiceRequest, REQUEST_SCHEMA};
 
 fn sibling_pack(name: &str) -> PathBuf {
     let environment_variable = match name {
@@ -28,6 +28,7 @@ fn engine(name: &str) -> Engine {
 
 fn request(date: &str, observances: &[&str]) -> CompileServiceRequest {
     CompileServiceRequest {
+        schema: REQUEST_SCHEMA.to_owned(),
         civil_date: date.to_owned(),
         service: "great_vespers".to_owned(),
         tone: None,

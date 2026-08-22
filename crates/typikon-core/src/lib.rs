@@ -11,12 +11,12 @@ use calendar::{
 use chrono::{Datelike, Duration, NaiveDate};
 use serde_json::Value;
 use thiserror::Error;
-use typikon_loader::LoadedPack;
+use typikon_loader::{LoadedPack, SchemaKind, validate_value};
 use typikon_schema::{
     CalendarDefinition, CompileServiceRequest, DayPredicate, Decision, LiturgicalDay,
     ObservanceDefinition, ObservancePredicate, PLAN_SCHEMA, Plan, PlanDerivation, PlanItem,
-    PlanObservance, PlanPack, PlanSection, PlanStatus, RuleDefinition, RulePredicate,
-    ServiceDefinition, SlotCardinality,
+    PlanObservance, PlanPack, PlanSection, PlanStatus, REQUEST_SCHEMA, RuleDefinition,
+    RulePredicate, ServiceDefinition, SlotCardinality,
 };
 
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -43,7 +43,10 @@ impl Engine {
     ///
     /// Returns an error for invalid request context, absent matches, unresolved
     /// variables, or ambiguous/missing exclusive slots.
-    pub fn compile_service(&self, mut request: CompileServiceRequest) -> Result<Plan, EngineError> {
+    pub fn compile_service(&self, request: CompileServiceRequest) -> Result<Plan, EngineError> {
+        if request.schema != REQUEST_SCHEMA {
+            return Err(EngineError::UnsupportedRequestSchema(request.schema));
+        }
         if let Some(tone) = &request.tone {
             validate_context_identifier("tone", tone)?;
         }
@@ -63,7 +66,6 @@ impl Engine {
 
         let automatic_observances = request.observances.is_empty();
         let observance_ids = self.select_observances(&request, &fixed_date)?;
-        request.observances.clone_from(&observance_ids);
         let observances = observance_ids
             .iter()
             .map(|id| {
@@ -109,6 +111,29 @@ impl Engine {
             sections,
             decisions,
         })
+    }
+
+    /// Validates and compiles a versioned UTF-8 JSON request into deterministic
+    /// UTF-8 JSON conforming to the plan contract.
+    ///
+    /// # Errors
+    ///
+    /// Returns an interoperability error for malformed JSON, request or plan
+    /// schema violations, typed deserialization errors, or compilation errors.
+    pub fn compile_service_json(&self, request_json: &str) -> Result<String, InteropError> {
+        let request_value: Value = serde_json::from_str(request_json)
+            .map_err(|error| InteropError::MalformedRequest(error.to_string()))?;
+        validate_value(SchemaKind::Request, "compile request", &request_value)
+            .map_err(|error| InteropError::InvalidRequest(error.to_string()))?;
+        let request = serde_json::from_value(request_value)
+            .map_err(|error| InteropError::InvalidRequest(error.to_string()))?;
+        let plan = self.compile_service(request)?;
+        let plan_value = serde_json::to_value(plan)
+            .map_err(|error| InteropError::PlanSerialization(error.to_string()))?;
+        validate_value(SchemaKind::Plan, "compiled plan", &plan_value)
+            .map_err(|error| InteropError::InvalidPlan(error.to_string()))?;
+        serde_json::to_string(&plan_value)
+            .map_err(|error| InteropError::PlanSerialization(error.to_string()))
     }
 
     fn evaluate_rules(
@@ -522,6 +547,8 @@ fn validate_required_slots(
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EngineError {
+    #[error("unsupported request schema '{0}'")]
+    UnsupportedRequestSchema(String),
     #[error("unknown service '{0}'")]
     UnknownService(String),
     #[error("unknown observance '{0}'")]
@@ -563,6 +590,20 @@ pub enum EngineError {
     },
     #[error("required slot {section}:{slot} has no emitted item")]
     MissingRequiredSlot { section: String, slot: String },
+}
+
+#[derive(Debug, Error)]
+pub enum InteropError {
+    #[error("malformed request JSON: {0}")]
+    MalformedRequest(String),
+    #[error("invalid request: {0}")]
+    InvalidRequest(String),
+    #[error(transparent)]
+    Compilation(#[from] EngineError),
+    #[error("compiled plan failed its schema contract: {0}")]
+    InvalidPlan(String),
+    #[error("cannot serialize compiled plan: {0}")]
+    PlanSerialization(String),
 }
 
 fn predicate_matches(

@@ -6,7 +6,8 @@ only at the validation boundary and for deliberately open-ended observance
 properties and semantic material attributes.
 
 The initial vocabulary is intentionally small: pack, service, observance, rule,
-authority, and plan. Rank and tone values remain pack strings rather than Rust
+authority, compile request, and plan. Every serialized input and output names
+its schema version. Rank and tone values remain pack strings rather than Rust
 enums. Material describes what a consumer must supply; it contains no prayer or
 hymn text.
 

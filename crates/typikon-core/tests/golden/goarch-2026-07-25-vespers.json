@@ -4,9 +4,10 @@
   "status": "complete",
   "pack": { "id": "goarch-experimental", "version": "0.1.0" },
   "request": {
+    "schema": "typikon.request/v0.1",
     "civil_date": "2026-07-25",
     "service": "great_vespers",
-    "observances": ["paraskevi-rome"]
+    "observances": []
   },
   "day": {
     "liturgical_date": "2026-07-26",

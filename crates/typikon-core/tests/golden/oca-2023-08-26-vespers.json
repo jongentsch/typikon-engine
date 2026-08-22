@@ -4,9 +4,10 @@
   "status": "complete",
   "pack": { "id": "oca-experimental", "version": "0.1.0" },
   "request": {
+    "schema": "typikon.request/v0.1",
     "civil_date": "2023-08-26",
     "service": "great_vespers",
-    "observances": ["pimen-great"]
+    "observances": []
   },
   "day": {
     "liturgical_date": "2023-08-27",

@@ -10,6 +10,7 @@ pub const SERVICE_SCHEMA: &str = "typikon.service/v0.1";
 pub const OBSERVANCE_SCHEMA: &str = "typikon.observance/v0.1";
 pub const RULE_SCHEMA: &str = "typikon.rule/v0.1";
 pub const AUTHORITY_SCHEMA: &str = "typikon.authority/v0.1";
+pub const REQUEST_SCHEMA: &str = "typikon.request/v0.1";
 pub const PLAN_SCHEMA: &str = "typikon.plan/v0.1";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -244,6 +245,7 @@ pub struct AuthorityReference {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct CompileServiceRequest {
+    pub schema: String,
     pub civil_date: String,
     pub service: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

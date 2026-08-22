@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://typikon.dev/schema/request/v0.1",
+  "title": "Typikon compile-service request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "civil_date", "service"],
+  "properties": {
+    "schema": { "const": "typikon.request/v0.1" },
+    "civil_date": { "type": "string", "format": "date" },
+    "service": { "$ref": "#/$defs/id" },
+    "tone": { "$ref": "#/$defs/id" },
+    "phase": { "enum": ["ordinary", "triodion", "pentecostarion"] },
+    "observances": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[a-z0-9_-]*[a-z0-9])?$" }
+  }
+}

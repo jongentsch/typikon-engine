@@ -53,6 +53,10 @@ OCA data remain external runtime inputs.
 Rules and loaded records are held in ordered maps. Observances are sorted, and
 decisions are numbered in deterministic evaluation order.
 
+The foreign-language boundary accepts a versioned request JSON document and
+returns a schema-validated plan JSON document. Automatic context discovery is
+recorded as output provenance and does not mutate the caller's recorded input.
+
 An observance predicate in `when` binds the matching observance for material
 variables. An observance predicate in `unless` checks the whole selected
 liturgical context, so the presence of another observance can exclude a rule.

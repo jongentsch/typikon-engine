@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
-use typikon_core::{Engine, EngineError};
+use typikon_core::{Engine, EngineError, InteropError};
 use typikon_loader::{MemoryResource, SchemaKind, Sourced, load_pack, validate_value};
 use typikon_schema::{
-    CompileServiceRequest, FixedCalendar, ObservancePredicate, OneOrMany, RulePredicate,
+    CompileServiceRequest, FixedCalendar, ObservancePredicate, OneOrMany, REQUEST_SCHEMA,
+    RulePredicate,
 };
 
 // Complete inline YAML documents keep the self-contained fixture reviewable.
@@ -184,6 +185,7 @@ fn engine() -> Engine {
 
 fn request(date: &str, observances: &[&str]) -> CompileServiceRequest {
     CompileServiceRequest {
+        schema: REQUEST_SCHEMA.to_owned(),
         civil_date: date.to_owned(),
         service: "great_vespers".to_owned(),
         tone: None,
@@ -210,6 +212,7 @@ fn synthetic_pack_compiles_a_schema_valid_plan() {
     assert_eq!(plan.day.phase, "ordinary");
     assert_eq!(plan.day.pascha, "2026-04-12");
     assert_eq!(plan.derivations[5].component, "tone");
+    assert!(plan.request.observances.is_empty());
     assert_eq!(plan.sections[0].items[0].count, Some(6));
     assert_eq!(plan.sections[0].items[1].count, Some(4));
     assert_eq!(plan.decisions[0].rule, "ordinary-rule");
@@ -217,6 +220,44 @@ fn synthetic_pack_compiles_a_schema_valid_plan() {
         plan.decisions[0].authority,
         ["synthetic-authority", "synthetic-observation"]
     );
+}
+
+#[test]
+fn serialized_boundary_validates_versions_and_is_deterministic() {
+    let request_json = serde_json::json!({
+        "schema": REQUEST_SCHEMA,
+        "civil_date": "2026-07-25",
+        "service": "great_vespers"
+    })
+    .to_string();
+    let engine = engine();
+    let first = engine.compile_service_json(&request_json).unwrap();
+    let second = engine.compile_service_json(&request_json).unwrap();
+    assert_eq!(first, second);
+
+    let plan: serde_json::Value = serde_json::from_str(&first).unwrap();
+    validate_value(SchemaKind::Plan, "serialized plan", &plan).unwrap();
+    assert_eq!(plan["request"]["observances"], serde_json::json!([]));
+    assert_eq!(plan["observances"][0]["id"], "primary-context");
+
+    let invalid = serde_json::json!({
+        "schema": REQUEST_SCHEMA,
+        "civil_date": "2026-07-25",
+        "service": "great_vespers",
+        "unexpected": true
+    })
+    .to_string();
+    assert!(matches!(
+        engine.compile_service_json(&invalid),
+        Err(InteropError::InvalidRequest(_))
+    ));
+
+    let mut unsupported = request("2026-07-25", &[]);
+    unsupported.schema = "typikon.request/v9".to_owned();
+    assert!(matches!(
+        engine.compile_service(unsupported),
+        Err(EngineError::UnsupportedRequestSchema(_))
+    ));
 }
 
 #[test]
