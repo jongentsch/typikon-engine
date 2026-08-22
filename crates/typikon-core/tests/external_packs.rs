@@ -61,25 +61,45 @@ fn goarch_dcs_paraskevi_case_matches_observed_plan() {
 }
 
 #[test]
-fn oca_lesser_saint_context_matches_published_seven_plus_three_case() {
-    let plan = engine("typikon-oca")
-        .compile_service(request("2026-08-22", "tone_3", &["lesser-saint-context"]))
+fn goarch_dcs_stephen_case_matches_observed_plan() {
+    let plan = engine("typikon-goarch")
+        .compile_service(request("2026-08-01", "plagal_fourth", &[]))
         .unwrap();
 
-    assert_golden(&plan, include_str!("golden/oca-lesser-saint-vespers.json"));
+    assert_golden(&plan, include_str!("golden/goarch-2026-08-01-vespers.json"));
+    assert_eq!(plan.day.liturgical_date, "2026-08-02");
+    assert_eq!(
+        plan.decisions[0].authority,
+        ["goarch-dcs-2026-08-01-vespers"]
+    );
 }
 
 #[test]
-fn oca_six_stichera_context_matches_published_six_plus_four_case() {
+fn oca_pimen_case_matches_published_seven_plus_three_case() {
     let plan = engine("typikon-oca")
-        .compile_service(request(
-            "2026-08-22",
-            "tone_3",
-            &["six-stichera-saint-context"],
-        ))
+        .compile_service(request("2023-08-26", "tone_3", &[]))
         .unwrap();
 
-    assert_golden(&plan, include_str!("golden/oca-six-stichera-vespers.json"));
+    assert_golden(&plan, include_str!("golden/oca-2023-08-26-vespers.json"));
+    assert_eq!(plan.day.liturgical_date, "2023-08-27");
+    assert_eq!(
+        plan.decisions[0].authority,
+        ["oca-great-vespers-sunday-outline", "oca-order-2023-08-27"]
+    );
+}
+
+#[test]
+fn oca_archangel_michael_case_matches_published_six_plus_four_case() {
+    let plan = engine("typikon-oca")
+        .compile_service(request("2026-09-05", "tone_5", &[]))
+        .unwrap();
+
+    assert_golden(&plan, include_str!("golden/oca-2026-09-05-vespers.json"));
+    assert_eq!(plan.day.liturgical_date, "2026-09-06");
+    assert_eq!(
+        plan.decisions[0].authority,
+        ["oca-great-vespers-sunday-outline", "oca-order-2026-09-06"]
+    );
 }
 
 #[test]
@@ -88,11 +108,7 @@ fn both_traditions_use_the_same_engine_vocabulary() {
         .compile_service(request("2026-07-25", "grave", &[]))
         .unwrap();
     let oca = engine("typikon-oca")
-        .compile_service(request(
-            "2026-08-22",
-            "tone_3",
-            &["six-stichera-saint-context"],
-        ))
+        .compile_service(request("2026-09-05", "tone_5", &[]))
         .unwrap();
 
     assert_eq!(goarch.sections[0].id, oca.sections[0].id);

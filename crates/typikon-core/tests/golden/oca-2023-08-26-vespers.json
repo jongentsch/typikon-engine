@@ -4,20 +4,20 @@
   "status": "complete",
   "pack": { "id": "oca-experimental", "version": "0.1.0" },
   "request": {
-    "civil_date": "2026-08-22",
+    "civil_date": "2023-08-26",
     "service": "great_vespers",
     "tone": "tone_3",
     "phase": "ordinary",
-    "observances": ["six-stichera-saint-context"]
+    "observances": ["pimen-great"]
   },
   "day": {
-    "liturgical_date": "2026-08-23",
+    "liturgical_date": "2023-08-27",
     "weekday": "sunday",
     "tone": "tone_3",
     "phase": "ordinary"
   },
   "observances": [
-    { "id": "six-stichera-saint-context", "name": "Six-stichera saint context fixture", "rank": "six-stichera" }
+    { "id": "pimen-great", "name": "Venerable Pimen the Great", "rank": "lesser" }
   ],
   "sections": [
     {
@@ -25,19 +25,19 @@
       "items": [
         {
           "slot": "stichera",
-          "count": 6,
+          "count": 7,
           "material": { "source": "octoechos", "kind": "sticheron", "role": "resurrectional", "tone": "tone_3" },
           "decision": "decision-0001"
         },
         {
           "slot": "stichera",
-          "count": 4,
-          "material": { "source": "observance", "kind": "sticheron", "role": "festal", "observance": "six-stichera-saint-context" },
+          "count": 3,
+          "material": { "source": "observance", "kind": "sticheron", "role": "festal", "observance": "pimen-great" },
           "decision": "decision-0001"
         },
         {
           "slot": "glory",
-          "material": { "source": "observance", "kind": "sticheron", "role": "doxastikon", "observance": "six-stichera-saint-context" },
+          "material": { "source": "observance", "kind": "sticheron", "role": "doxastikon", "observance": "pimen-great" },
           "decision": "decision-0001"
         },
         {
@@ -51,9 +51,9 @@
   "decisions": [
     {
       "id": "decision-0001",
-      "rule": "ordinary-sunday-six-stichera",
-      "authority": ["oca-great-vespers-sunday-outline"],
-      "observance": "six-stichera-saint-context"
+      "rule": "ordinary-sunday-lesser",
+      "authority": ["oca-great-vespers-sunday-outline", "oca-order-2023-08-27"],
+      "observance": "pimen-great"
     }
   ]
 }
