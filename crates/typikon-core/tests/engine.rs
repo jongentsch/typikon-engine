@@ -1,0 +1,238 @@
+use std::collections::BTreeMap;
+
+use typikon_core::{Engine, EngineError};
+use typikon_loader::{MemoryResource, SchemaKind, Sourced, load_pack, validate_value};
+use typikon_schema::{CompileServiceRequest, ObservancePredicate, OneOrMany, RulePredicate};
+
+// Complete inline YAML documents keep the self-contained fixture reviewable.
+#[allow(clippy::too_many_lines)]
+fn synthetic_pack() -> typikon_loader::LoadedPack {
+    let files = BTreeMap::from([
+        (
+            "pack.yaml".to_owned(),
+            r"schema: typikon.pack/v0.1
+id: synthetic
+name: Synthetic engine test pack
+version: 0.1.0
+calendar:
+  fixed: gregorian
+  paschalion: orthodox
+definitions:
+  services: services/
+  observances: observances/
+  rules: rules/
+  authorities: authorities/
+"
+            .as_bytes()
+            .to_vec(),
+        ),
+        (
+            "services/vespers.yaml".to_owned(),
+            r"schema: typikon.service/v0.1
+id: great_vespers
+name: Great Vespers
+liturgical_day_offset: 1
+sections:
+  - id: lord_i_call
+    slots:
+      - id: stichera
+        cardinality: many
+      - id: glory
+        cardinality: optional
+      - id: both_now
+        cardinality: optional
+"
+            .as_bytes()
+            .to_vec(),
+        ),
+        (
+            "observances/primary.yaml".to_owned(),
+            r"schema: typikon.observance/v0.1
+id: primary-context
+name: Primary context
+date:
+  fixed:
+    month: 7
+    day: 26
+rank: six-stichera
+properties:
+  has_glory: true
+  glory_tone: tone_6
+"
+            .as_bytes()
+            .to_vec(),
+        ),
+        (
+            "observances/blocking.yaml".to_owned(),
+            r"schema: typikon.observance/v0.1
+id: blocking-context
+name: Blocking context
+rank: blocking
+"
+            .as_bytes()
+            .to_vec(),
+        ),
+        (
+            "rules/ordinary.yaml".to_owned(),
+            r"schema: typikon.rule/v0.1
+id: ordinary-rule
+when:
+  service: great_vespers
+  day:
+    weekday: sunday
+    phase: ordinary
+  observance:
+    rank: six-stichera
+    properties:
+      has_glory: true
+emit:
+  - section: lord_i_call
+    slot: stichera
+    material:
+      source: cycle
+      role: primary
+      tone: $day.tone
+    count: 6
+  - section: lord_i_call
+    slot: stichera
+    material:
+      source: observance
+      role: secondary
+      observance: $observance.id
+    count: 4
+  - section: lord_i_call
+    slot: glory
+    material:
+      source: observance
+      role: doxastikon
+  - section: lord_i_call
+    slot: both_now
+    material:
+      source: cycle
+      role: theotokion
+      tone: $observance.properties.glory_tone
+authority:
+  - synthetic-authority
+"
+            .as_bytes()
+            .to_vec(),
+        ),
+        (
+            "authorities/source.yaml".to_owned(),
+            r"schema: typikon.authority/v0.1
+id: synthetic-authority
+title: Synthetic test authority
+kind: authoritative
+"
+            .as_bytes()
+            .to_vec(),
+        ),
+    ]);
+    load_pack(&MemoryResource::new(files)).unwrap()
+}
+
+fn engine() -> Engine {
+    Engine::new(synthetic_pack())
+}
+
+fn request(date: &str, tone: &str, observances: &[&str]) -> CompileServiceRequest {
+    CompileServiceRequest {
+        civil_date: date.to_owned(),
+        service: "great_vespers".to_owned(),
+        tone: tone.to_owned(),
+        phase: "ordinary".to_owned(),
+        observances: observances
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect(),
+    }
+}
+
+#[test]
+fn synthetic_pack_compiles_a_schema_valid_plan() {
+    let plan = engine()
+        .compile_service(request("2026-07-25", "tone_7", &[]))
+        .unwrap();
+    let value = serde_json::to_value(&plan).unwrap();
+    validate_value(SchemaKind::Plan, "synthetic plan", &value).unwrap();
+
+    assert_eq!(plan.pack.id, "synthetic");
+    assert_eq!(plan.day.liturgical_date, "2026-07-26");
+    assert_eq!(plan.day.weekday, "sunday");
+    assert_eq!(plan.sections[0].items[0].count, Some(6));
+    assert_eq!(plan.sections[0].items[1].count, Some(4));
+    assert_eq!(plan.decisions[0].rule, "ordinary-rule");
+}
+
+#[test]
+fn compilation_is_byte_for_byte_deterministic() {
+    let engine = engine();
+    let first = engine
+        .compile_service(request("2026-07-25", "tone_7", &[]))
+        .unwrap();
+    let second = engine
+        .compile_service(request("2026-07-25", "tone_7", &[]))
+        .unwrap();
+
+    assert_eq!(
+        serde_json::to_vec(&first).unwrap(),
+        serde_json::to_vec(&second).unwrap()
+    );
+}
+
+#[test]
+fn conflicting_exclusive_emissions_report_ambiguity() {
+    let mut pack = synthetic_pack();
+    let mut duplicate = pack.rules["ordinary-rule"].clone();
+    duplicate.value.id = "second-rule".to_owned();
+    pack.rules.insert(
+        duplicate.value.id.clone(),
+        Sourced {
+            source: "test:synthetic-conflict".to_owned(),
+            value: duplicate.value,
+        },
+    );
+
+    let error = Engine::new(pack)
+        .compile_service(request("2026-07-25", "tone_7", &[]))
+        .unwrap_err();
+    assert!(matches!(error, EngineError::AmbiguousSlot { .. }));
+    assert!(error.to_string().contains("lord_i_call:glory"));
+}
+
+#[test]
+fn invalid_context_values_cannot_escape_the_plan_contract() {
+    let error = engine()
+        .compile_service(request("2026-07-25", "Tone seven", &[]))
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        EngineError::InvalidContextValue { field: "tone", .. }
+    ));
+
+    let error = engine()
+        .compile_service(request("2026-7-25", "tone_7", &[]))
+        .unwrap_err();
+    assert!(matches!(error, EngineError::InvalidCivilDate { .. }));
+}
+
+#[test]
+fn unless_observance_checks_the_whole_selected_context() {
+    let mut pack = synthetic_pack();
+    pack.rules.get_mut("ordinary-rule").unwrap().value.unless = Some(RulePredicate {
+        observance: Some(ObservancePredicate {
+            rank: Some(OneOrMany::One("blocking".to_owned())),
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+
+    let error = Engine::new(pack)
+        .compile_service(request(
+            "2026-07-25",
+            "tone_7",
+            &["primary-context", "blocking-context"],
+        ))
+        .unwrap_err();
+    assert!(matches!(error, EngineError::NoMatchingRules { .. }));
+}

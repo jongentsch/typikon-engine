@@ -1,11 +1,21 @@
+#![cfg(feature = "conformance")]
+
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use typikon_core::{Engine, EngineError};
-use typikon_loader::{DirectoryResource, SchemaKind, Sourced, load_pack, validate_value};
+use typikon_core::Engine;
+use typikon_loader::{DirectoryResource, SchemaKind, load_pack, validate_value};
 use typikon_schema::CompileServiceRequest;
 
 fn sibling_pack(name: &str) -> PathBuf {
+    let environment_variable = match name {
+        "typikon-goarch" => "TYPIKON_GOARCH_PACK",
+        "typikon-oca" => "TYPIKON_OCA_PACK",
+        _ => unreachable!("test names are fixed"),
+    };
+    if let Some(path) = std::env::var_os(environment_variable) {
+        return PathBuf::from(path);
+    }
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
         .join(name)
@@ -97,89 +107,4 @@ fn both_traditions_use_the_same_engine_vocabulary() {
         .map(|item| item.slot.as_str())
         .collect::<Vec<_>>();
     assert_eq!(goarch_slots, oca_slots);
-}
-
-#[test]
-fn compilation_is_byte_for_byte_deterministic() {
-    let engine = engine("typikon-goarch");
-    let first = engine
-        .compile_service(request("2026-07-25", "grave", &[]))
-        .unwrap();
-    let second = engine
-        .compile_service(request("2026-07-25", "grave", &[]))
-        .unwrap();
-
-    assert_eq!(
-        serde_json::to_vec(&first).unwrap(),
-        serde_json::to_vec(&second).unwrap()
-    );
-}
-
-#[test]
-fn conflicting_exclusive_emissions_report_ambiguity() {
-    let resource = DirectoryResource::new(sibling_pack("typikon-oca")).unwrap();
-    let mut pack = load_pack(&resource).unwrap();
-    let mut duplicate = pack.rules["ordinary-sunday-six-stichera"].clone();
-    duplicate.value.id = "second-six-stichera-rule".to_owned();
-    pack.rules.insert(
-        duplicate.value.id.clone(),
-        Sourced {
-            source: "test:synthetic-conflict".to_owned(),
-            value: duplicate.value,
-        },
-    );
-
-    let error = Engine::new(pack)
-        .compile_service(request(
-            "2026-08-22",
-            "tone_3",
-            &["six-stichera-saint-context"],
-        ))
-        .unwrap_err();
-    assert!(matches!(error, EngineError::AmbiguousSlot { .. }));
-    assert!(error.to_string().contains("lord_i_call:glory"));
-}
-
-#[test]
-fn invalid_context_values_cannot_escape_the_plan_contract() {
-    let error = engine("typikon-goarch")
-        .compile_service(request("2026-07-25", "Grave mode", &[]))
-        .unwrap_err();
-    assert!(matches!(
-        error,
-        EngineError::InvalidContextValue { field: "tone", .. }
-    ));
-
-    let error = engine("typikon-goarch")
-        .compile_service(request("2026-7-25", "grave", &[]))
-        .unwrap_err();
-    assert!(matches!(error, EngineError::InvalidCivilDate { .. }));
-}
-
-#[test]
-fn unless_observance_checks_the_whole_selected_context() {
-    let resource = DirectoryResource::new(sibling_pack("typikon-oca")).unwrap();
-    let mut pack = load_pack(&resource).unwrap();
-    pack.rules.remove("ordinary-sunday-lesser");
-    let rule = &mut pack
-        .rules
-        .get_mut("ordinary-sunday-six-stichera")
-        .unwrap()
-        .value;
-    rule.unless = Some(typikon_schema::RulePredicate {
-        observance: Some(typikon_schema::ObservancePredicate {
-            rank: Some(typikon_schema::OneOrMany::One("lesser".to_owned())),
-            ..Default::default()
-        }),
-        ..Default::default()
-    });
-
-    let error = Engine::new(pack)
-        .compile_service(request(
-            "2026-08-22",
-            "tone_3",
-            &["six-stichera-saint-context", "lesser-saint-context"],
-        ))
-        .unwrap_err();
-    assert!(matches!(error, EngineError::NoMatchingRules { .. }));
 }

@@ -1,5 +1,7 @@
 # Typikon Engine
 
+[![CI](https://github.com/jongentsch/typikon-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/jongentsch/typikon-engine/actions/workflows/ci.yml)
+
 `typikon-engine` is the Rust-engine repository in a three-repository project:
 
 - `typikon-engine/` (this directory): generic loader, evaluator, CLI, and schemas;
@@ -46,6 +48,20 @@ Run the complete verification suite with:
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+These default tests are self-contained and pass in a standalone engine clone.
+Cross-repository conformance tests are deliberately explicit. With the GOARCH
+and OCA repositories checked out beside this repository, run:
+
+```console
+cargo test -p typikon-core \
+  --features conformance \
+  --test external_packs
+```
+
+`TYPIKON_GOARCH_PACK` and `TYPIKON_OCA_PACK` may be set to alternate pack
+directories. CI checks out all three repositories side by side and runs this
+target separately from the standalone suite.
 
 ## Workspace boundary
 
