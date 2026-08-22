@@ -43,8 +43,10 @@ cargo run -p typikon-cli -- compile-service \
   --service great_vespers
 ```
 
-The engine calculates Orthodox Pascha and the ordinary Octoechos tone from the
-date. `--tone` is optional and acts only as an assertion against that result.
+The engine calculates Orthodox Pascha, the Triodion/Pentecostarion/ordinary
+phase, and the ordinary Octoechos tone from the date. `--tone` and `--phase`
+are optional assertions against those results. Pascha through Bright Saturday
+has an explicit `null` ordinary tone rather than a fabricated mode.
 
 Run the complete verification suite with:
 

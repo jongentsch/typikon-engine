@@ -6,7 +6,6 @@
   "request": {
     "civil_date": "2026-09-05",
     "service": "great_vespers",
-    "phase": "ordinary",
     "observances": ["archangel-michael-colossae"]
   },
   "day": {
@@ -50,8 +49,12 @@
     {
       "id": "derivation-0005",
       "component": "phase",
-      "method": "caller_supplied",
-      "inputs": {},
+      "method": "paschal_cycle_window",
+      "inputs": {
+        "pascha": "2026-04-12",
+        "pentecostarion_end": "2026-06-07",
+        "triodion_start": "2026-02-01"
+      },
       "output": "ordinary"
     },
     {

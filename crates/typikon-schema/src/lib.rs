@@ -248,14 +248,10 @@ pub struct CompileServiceRequest {
     pub service: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tone: Option<String>,
-    #[serde(default = "ordinary_phase")]
-    pub phase: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
     #[serde(default)]
     pub observances: Vec<String>,
-}
-
-fn ordinary_phase() -> String {
-    "ordinary".to_owned()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -295,7 +291,7 @@ pub struct LiturgicalDay {
     pub fixed_calendar: FixedCalendar,
     pub pascha: String,
     pub weekday: String,
-    pub tone: String,
+    pub tone: Option<String>,
     pub phase: String,
 }
 

@@ -23,8 +23,9 @@ The public request date is a proleptic Gregorian civil date. Compilation then:
 2. projects that liturgical date into the pack's fixed calendar;
 3. selects fixed observances by the projected month and day;
 4. calculates Orthodox Pascha for the civil year;
-5. calculates the Octoechos ordinal and maps it through the pack's eight tone
-   names.
+5. classifies the movable cycle as `triodion`, `pentecostarion`, or `ordinary`;
+6. calculates the Octoechos ordinal and maps it through the pack's eight tone
+   names when the ordinary tone cycle is active.
 
 The output retains the civil liturgical date, projected fixed date, fixed
 calendar, Pascha, and calculated tone. It also emits a derivation record for
@@ -51,18 +52,26 @@ through 9999. A test covers their first future divergence in 2800.
 converts the resulting Julian date to the civil Gregorian calendar. Published
 OCA Pascha dates from 2023 through 2030 are regression cases.
 
+The Triodion phase begins 70 days before Pascha, on the Sunday of the Publican
+and Pharisee, and continues through Holy Saturday. The Pentecostarion phase
+runs from Pascha through the Sunday of All Saints, 56 days later. All remaining
+dates are classified as ordinary.
+
 The `octoechos` calculation anchors Tone 1 on the Sunday after Pascha. The OCA
 description restarts Tone 1 on the second Sunday after Pentecost, exactly eight
 weeks later, so both descriptions produce the same ordinal for ordinary-cycle
-dates. Pascha and Bright Week deliberately return no ordinary Octoechos tone.
+dates. Pascha through Bright Saturday deliberately returns a `null` ordinary
+Octoechos tone with a suspension derivation rather than failing calendar
+context construction or inventing a tone.
 The four dated tradition witnesses independently confirm the calculated tones.
 
 ## Current boundary
 
-The phase remains caller-supplied and is labeled `caller_supplied` in the
-derivation output. Triodion, Pentecostarion, feast interaction, transfer, and
-precedence calculations remain future work. A supplied CLI `--tone` is treated
-only as an assertion and fails if it disagrees with the calculated pack tone.
+The three-way phase identifies the governing movable-cycle book; it does not
+yet model the many internal subperiods. Feast interaction, transfer, and
+precedence calculations remain future work. Supplied CLI `--tone` and `--phase`
+values are treated only as assertions and fail if they disagree with the
+calculation.
 
 ## Evidence reviewed
 
@@ -71,6 +80,11 @@ only as an assertion and fails if it disagrees with the calculated pack tone.
   <https://www.goarch.org/-/dating-pascha-in-the-orthodox-church>
 - OCA, published Paschal-cycle dates:
   <https://www.oca.org/fs/paschal-cycle>
+- OCA, the Triodion beginning on the tenth Sunday before Pascha:
+  <https://www.oca.org/news/archived/resources-the-pre-lenten-sundays-preparing-for-our-lenten-journey>
+- OCA, the Pentecostarion beginning at Pascha and ending with the Sunday of All
+  Saints:
+  <https://www.oca.org/reflections/fr.-steven-kostoff/called-by-the-saints>
 - GOARCH, the recurring eight-week Octoechos sequence beginning after Pascha:
   <https://www.goarch.org/-/orthodox-worship>
 - OCA, the eight-week sequence and its second-Sunday-after-Pentecost anchor:

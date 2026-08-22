@@ -27,6 +27,14 @@ pub struct ToneComputation {
     pub weeks_from_anchor: i64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PhaseComputation {
+    pub phase: &'static str,
+    pub pascha: NaiveDate,
+    pub triodion_start: NaiveDate,
+    pub pentecostarion_end: NaiveDate,
+}
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CalendarError {
     #[error("calendar calculation does not support year {0}")]
@@ -35,8 +43,6 @@ pub enum CalendarError {
     RevisedJulianRange,
     #[error("the Octoechos tone cycle requires exactly eight pack tone names")]
     InvalidToneVocabulary,
-    #[error("the ordinary Octoechos tone cycle is suspended for {date}")]
-    ToneCycleSuspended { date: NaiveDate },
     #[error("calendar arithmetic overflowed")]
     Overflow,
 }
@@ -93,9 +99,13 @@ pub fn orthodox_pascha(year: i32) -> Result<NaiveDate, CalendarError> {
 ///
 /// # Errors
 ///
-/// Returns an error unless the pack supplies exactly eight tones, when the
-/// date is Pascha through Bright Saturday, or when date arithmetic overflows.
-pub fn octoechos_tone(date: NaiveDate, tones: &[String]) -> Result<ToneComputation, CalendarError> {
+/// Returns an error unless the pack supplies exactly eight tones or date
+/// arithmetic overflows. Pascha through Bright Saturday returns `None` because
+/// the ordinary Octoechos cycle is suspended.
+pub fn octoechos_tone(
+    date: NaiveDate,
+    tones: &[String],
+) -> Result<Option<ToneComputation>, CalendarError> {
     if tones.len() != 8 {
         return Err(CalendarError::InvalidToneVocabulary);
     }
@@ -104,7 +114,7 @@ pub fn octoechos_tone(date: NaiveDate, tones: &[String]) -> Result<ToneComputati
         .checked_add_signed(Duration::days(7))
         .ok_or(CalendarError::Overflow)?;
     if date >= pascha && date < anchor {
-        return Err(CalendarError::ToneCycleSuspended { date });
+        return Ok(None);
     }
     let anchor = if date >= anchor {
         anchor
@@ -116,11 +126,39 @@ pub fn octoechos_tone(date: NaiveDate, tones: &[String]) -> Result<ToneComputati
     let weeks_from_anchor = (date - anchor).num_days().div_euclid(7);
     let zero_based =
         usize::try_from(weeks_from_anchor.rem_euclid(8)).map_err(|_| CalendarError::Overflow)?;
-    Ok(ToneComputation {
+    Ok(Some(ToneComputation {
         tone: tones[zero_based].clone(),
         ordinal: u8::try_from(zero_based + 1).map_err(|_| CalendarError::Overflow)?,
         anchor,
         weeks_from_anchor,
+    }))
+}
+
+/// Classifies a date by the liturgical book governing the movable cycle.
+///
+/// # Errors
+///
+/// Returns an error when Pascha or boundary arithmetic cannot be represented.
+pub fn liturgical_phase(date: NaiveDate) -> Result<PhaseComputation, CalendarError> {
+    let pascha = orthodox_pascha(date.year())?;
+    let triodion_start = pascha
+        .checked_sub_signed(Duration::days(70))
+        .ok_or(CalendarError::Overflow)?;
+    let pentecostarion_end = pascha
+        .checked_add_signed(Duration::days(56))
+        .ok_or(CalendarError::Overflow)?;
+    let phase = if date >= triodion_start && date < pascha {
+        "triodion"
+    } else if date <= pentecostarion_end && date >= pascha {
+        "pentecostarion"
+    } else {
+        "ordinary"
+    };
+    Ok(PhaseComputation {
+        phase,
+        pascha,
+        triodion_start,
+        pentecostarion_end,
     })
 }
 
@@ -318,7 +356,10 @@ mod tests {
         ];
         for (date, ordinal) in cases {
             let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
-            assert_eq!(octoechos_tone(date, &tones).unwrap().ordinal, ordinal);
+            assert_eq!(
+                octoechos_tone(date, &tones).unwrap().unwrap().ordinal,
+                ordinal
+            );
         }
     }
 
@@ -328,10 +369,7 @@ mod tests {
             .map(|tone| format!("tone_{tone}"))
             .collect::<Vec<_>>();
         let date = NaiveDate::from_ymd_opt(2026, 4, 12).unwrap();
-        assert_eq!(
-            octoechos_tone(date, &tones),
-            Err(CalendarError::ToneCycleSuspended { date })
-        );
+        assert_eq!(octoechos_tone(date, &tones).unwrap(), None);
     }
 
     #[test]
@@ -340,8 +378,24 @@ mod tests {
             .map(|tone| format!("tone_{tone}"))
             .collect::<Vec<_>>();
         let date = NaiveDate::from_ymd_opt(2026, 4, 19).unwrap();
-        let result = octoechos_tone(date, &tones).unwrap();
+        let result = octoechos_tone(date, &tones).unwrap().unwrap();
         assert_eq!(result.ordinal, 1);
         assert_eq!(result.anchor, date);
+    }
+
+    #[test]
+    fn liturgical_phase_uses_the_triodion_and_pentecostarion_boundaries() {
+        let cases = [
+            ("2026-01-31", "ordinary"),
+            ("2026-02-01", "triodion"),
+            ("2026-04-11", "triodion"),
+            ("2026-04-12", "pentecostarion"),
+            ("2026-06-07", "pentecostarion"),
+            ("2026-06-08", "ordinary"),
+        ];
+        for (date, expected) in cases {
+            let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
+            assert_eq!(liturgical_phase(date).unwrap().phase, expected);
+        }
     }
 }

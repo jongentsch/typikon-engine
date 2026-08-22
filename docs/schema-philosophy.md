@@ -24,7 +24,9 @@ callbacks, and magic numeric priorities are unsupported.
 Calendar configuration uses closed enums for algorithms but keeps the eight
 tone names in pack vocabulary. Compiled plans expose ordered component
 derivations rather than hiding calendar conversion, Pascha, weekday, tone, or
-caller-supplied phase behind a single opaque result.
+calculated phase behind a single opaque result. The ordinary tone is nullable
+only for Pascha through Bright Saturday, when the cycle is explicitly
+suspended.
 
 The `observance.properties` object is an escape hatch for evidence-led pack
 experimentation. A property should graduate into a first-class concept only

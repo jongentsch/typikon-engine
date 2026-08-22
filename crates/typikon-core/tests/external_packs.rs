@@ -31,7 +31,7 @@ fn request(date: &str, observances: &[&str]) -> CompileServiceRequest {
         civil_date: date.to_owned(),
         service: "great_vespers".to_owned(),
         tone: None,
-        phase: "ordinary".to_owned(),
+        phase: None,
         observances: observances
             .iter()
             .map(|value| (*value).to_owned())

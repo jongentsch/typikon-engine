@@ -187,7 +187,7 @@ fn request(date: &str, observances: &[&str]) -> CompileServiceRequest {
         civil_date: date.to_owned(),
         service: "great_vespers".to_owned(),
         tone: None,
-        phase: "ordinary".to_owned(),
+        phase: None,
         observances: observances
             .iter()
             .map(|value| (*value).to_owned())
@@ -206,7 +206,8 @@ fn synthetic_pack_compiles_a_schema_valid_plan() {
     assert_eq!(plan.pack.id, "synthetic");
     assert_eq!(plan.day.liturgical_date, "2026-07-26");
     assert_eq!(plan.day.weekday, "sunday");
-    assert_eq!(plan.day.tone, "tone_7");
+    assert_eq!(plan.day.tone.as_deref(), Some("tone_7"));
+    assert_eq!(plan.day.phase, "ordinary");
     assert_eq!(plan.day.pascha, "2026-04-12");
     assert_eq!(plan.derivations[5].component, "tone");
     assert_eq!(plan.sections[0].items[0].count, Some(6));
@@ -265,6 +266,11 @@ fn invalid_context_values_cannot_escape_the_plan_contract() {
     let error = engine().compile_service(wrong_tone).unwrap_err();
     assert!(matches!(error, EngineError::ToneMismatch { .. }));
 
+    let mut wrong_phase = request("2026-07-25", &[]);
+    wrong_phase.phase = Some("triodion".to_owned());
+    let error = engine().compile_service(wrong_phase).unwrap_err();
+    assert!(matches!(error, EngineError::PhaseMismatch { .. }));
+
     let error = engine()
         .compile_service(request("2026-7-25", &[]))
         .unwrap_err();
@@ -275,6 +281,15 @@ fn invalid_context_values_cannot_escape_the_plan_contract() {
 fn old_calendar_projection_selects_the_fixed_observance() {
     let mut pack = synthetic_pack();
     pack.pack.value.calendar.fixed = FixedCalendar::Julian;
+    pack.rules
+        .get_mut("ordinary-rule")
+        .unwrap()
+        .value
+        .when
+        .day
+        .as_mut()
+        .unwrap()
+        .phase = Some(OneOrMany::One("triodion".to_owned()));
     let fixed = &mut pack
         .observances
         .get_mut("primary-context")
@@ -300,6 +315,40 @@ fn old_calendar_projection_selects_the_fixed_observance() {
     assert_eq!(
         plan.observances[0].selection_derivation.as_deref(),
         Some("derivation-0002")
+    );
+}
+
+#[test]
+fn bright_week_plan_exposes_suspended_tone_without_fabricating_one() {
+    let mut pack = synthetic_pack();
+    let rule = &mut pack.rules.get_mut("ordinary-rule").unwrap().value;
+    rule.when.day.as_mut().unwrap().phase = Some(OneOrMany::One("pentecostarion".to_owned()));
+    for emission in &mut rule.emit {
+        if emission
+            .material
+            .get("tone")
+            .and_then(serde_json::Value::as_str)
+            == Some("$day.tone")
+        {
+            emission.material.insert(
+                "tone".to_owned(),
+                serde_json::Value::String("paschal".to_owned()),
+            );
+        }
+    }
+
+    let plan = Engine::new(pack)
+        .compile_service(request("2026-04-11", &["primary-context"]))
+        .unwrap();
+    let value = serde_json::to_value(&plan).unwrap();
+    validate_value(SchemaKind::Plan, "Bright Week plan", &value).unwrap();
+
+    assert_eq!(plan.day.phase, "pentecostarion");
+    assert_eq!(plan.day.tone, None);
+    assert_eq!(plan.derivations[5].output, serde_json::Value::Null);
+    assert_eq!(
+        plan.derivations[5].method,
+        "octoechos_suspended_bright_week"
     );
 }
 

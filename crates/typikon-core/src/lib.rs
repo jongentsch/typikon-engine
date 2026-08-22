@@ -5,8 +5,8 @@ pub mod calendar;
 use std::collections::{BTreeMap, BTreeSet};
 
 use calendar::{
-    CalendarDate, CalendarError, ToneComputation, octoechos_tone, orthodox_pascha,
-    project_fixed_date,
+    CalendarDate, CalendarError, PhaseComputation, ToneComputation, liturgical_phase,
+    octoechos_tone, orthodox_pascha, project_fixed_date,
 };
 use chrono::{Datelike, Duration, NaiveDate};
 use serde_json::Value;
@@ -47,7 +47,9 @@ impl Engine {
         if let Some(tone) = &request.tone {
             validate_context_identifier("tone", tone)?;
         }
-        validate_context_identifier("phase", &request.phase)?;
+        if let Some(phase) = &request.phase {
+            validate_context_identifier("phase", phase)?;
+        }
         let service = self
             .pack
             .services
@@ -307,12 +309,22 @@ fn build_day(
     let fixed_date = project_fixed_date(date, calendar.fixed)?;
     let pascha = orthodox_pascha(date.year())?;
     let tone = octoechos_tone(date, &calendar.tone_cycle.tones)?;
-    if let Some(requested) = &request.tone
-        && requested != &tone.tone
+    let phase = liturgical_phase(date)?;
+    if let Some(requested) = &request.tone {
+        let calculated = tone.as_ref().map(|value| value.tone.as_str());
+        if Some(requested.as_str()) != calculated {
+            return Err(EngineError::ToneMismatch {
+                requested: requested.clone(),
+                calculated: calculated.map(str::to_owned),
+            });
+        }
+    }
+    if let Some(requested) = &request.phase
+        && requested != phase.phase
     {
-        return Err(EngineError::ToneMismatch {
+        return Err(EngineError::PhaseMismatch {
             requested: requested.clone(),
-            calculated: tone.tone,
+            calculated: phase.phase.to_owned(),
         });
     }
     let day = LiturgicalDay {
@@ -321,11 +333,18 @@ fn build_day(
         fixed_calendar: calendar.fixed,
         pascha: pascha.to_string(),
         weekday: weekday_name(date).to_owned(),
-        tone: tone.tone.clone(),
-        phase: request.phase.clone(),
+        tone: tone.as_ref().map(|value| value.tone.clone()),
+        phase: phase.phase.to_owned(),
     };
-    let derivations =
-        build_day_derivations(request, liturgical_day_offset, calendar, &day, &tone, date);
+    let derivations = build_day_derivations(
+        request,
+        liturgical_day_offset,
+        calendar,
+        &day,
+        tone.as_ref(),
+        &phase,
+        date,
+    );
     Ok((fixed_date, day, derivations))
 }
 
@@ -334,7 +353,8 @@ fn build_day_derivations(
     liturgical_day_offset: i32,
     calendar: &CalendarDefinition,
     day: &LiturgicalDay,
-    tone: &ToneComputation,
+    tone: Option<&ToneComputation>,
+    phase: &PhaseComputation,
     date: NaiveDate,
 ) -> Vec<PlanDerivation> {
     let derivations = vec![
@@ -390,11 +410,47 @@ fn build_day_derivations(
         PlanDerivation {
             id: "derivation-0005".to_owned(),
             component: "phase".to_owned(),
-            method: "caller_supplied".to_owned(),
-            inputs: BTreeMap::new(),
+            method: "paschal_cycle_window".to_owned(),
+            inputs: BTreeMap::from([
+                ("pascha".to_owned(), Value::String(phase.pascha.to_string())),
+                (
+                    "pentecostarion_end".to_owned(),
+                    Value::String(phase.pentecostarion_end.to_string()),
+                ),
+                (
+                    "triodion_start".to_owned(),
+                    Value::String(phase.triodion_start.to_string()),
+                ),
+            ]),
             output: Value::String(day.phase.clone()),
         },
-        PlanDerivation {
+        tone_derivation(tone, phase),
+    ];
+    derivations
+}
+
+fn tone_derivation(tone: Option<&ToneComputation>, phase: &PhaseComputation) -> PlanDerivation {
+    tone.map_or_else(
+        || PlanDerivation {
+            id: "derivation-0006".to_owned(),
+            component: "tone".to_owned(),
+            method: "octoechos_suspended_bright_week".to_owned(),
+            inputs: BTreeMap::from([
+                ("pascha".to_owned(), Value::String(phase.pascha.to_string())),
+                (
+                    "resumes".to_owned(),
+                    Value::String(
+                        phase
+                            .pascha
+                            .checked_add_signed(Duration::days(7))
+                            .expect("validated calendar arithmetic")
+                            .to_string(),
+                    ),
+                ),
+            ]),
+            output: Value::Null,
+        },
+        |tone| PlanDerivation {
             id: "derivation-0006".to_owned(),
             component: "tone".to_owned(),
             method: "octoechos_sunday_after_pascha".to_owned(),
@@ -406,10 +462,9 @@ fn build_day_derivations(
                     Value::Number(tone.weeks_from_anchor.into()),
                 ),
             ]),
-            output: Value::String(day.tone.clone()),
+            output: Value::String(tone.tone.clone()),
         },
-    ];
-    derivations
+    )
 }
 
 fn validate_context_identifier(field: &'static str, value: &str) -> Result<(), EngineError> {
@@ -479,8 +534,13 @@ pub enum EngineError {
     InvalidContextValue { field: &'static str, value: String },
     #[error("liturgical date overflowed the supported date range")]
     DateOverflow,
-    #[error("requested tone '{requested}' does not match calculated tone '{calculated}'")]
+    #[error("requested tone '{requested}' does not match calculated tone {calculated:?}")]
     ToneMismatch {
+        requested: String,
+        calculated: Option<String>,
+    },
+    #[error("requested phase '{requested}' does not match calculated phase '{calculated}'")]
+    PhaseMismatch {
         requested: String,
         calculated: String,
     },
@@ -575,7 +635,11 @@ fn resolve_value(
     match variable {
         "$day.liturgical_date" => Ok(Value::String(day.liturgical_date.clone())),
         "$day.weekday" => Ok(Value::String(day.weekday.clone())),
-        "$day.tone" => Ok(Value::String(day.tone.clone())),
+        "$day.tone" => day
+            .tone
+            .as_ref()
+            .map(|tone| Value::String(tone.clone()))
+            .ok_or_else(|| variable.to_owned()),
         "$day.phase" => Ok(Value::String(day.phase.clone())),
         "$observance.id" => observance
             .map(|value| Value::String(value.id.clone()))

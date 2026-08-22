@@ -36,8 +36,9 @@ enum Command {
         /// Optional assertion checked against the calculated tradition tone.
         #[arg(long)]
         tone: Option<String>,
-        #[arg(long, default_value = "ordinary")]
-        phase: String,
+        /// Optional assertion checked against the calculated liturgical phase.
+        #[arg(long)]
+        phase: Option<String>,
         /// Explicit context observance ID; repeat for multiple observances.
         #[arg(long = "observance")]
         observances: Vec<String>,

@@ -21,12 +21,12 @@
     "request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["civil_date", "service", "phase", "observances"],
+      "required": ["civil_date", "service", "observances"],
       "properties": {
         "civil_date": { "type": "string", "format": "date" },
         "service": { "$ref": "#/$defs/id" },
         "tone": { "$ref": "#/$defs/id" },
-        "phase": { "$ref": "#/$defs/id" },
+        "phase": { "enum": ["ordinary", "triodion", "pentecostarion"] },
         "observances": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
       }
     },
@@ -43,8 +43,13 @@
         "fixed_calendar": { "enum": ["gregorian", "julian", "revised_julian"] },
         "pascha": { "type": "string", "format": "date" },
         "weekday": { "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] },
-        "tone": { "$ref": "#/$defs/id" },
-        "phase": { "$ref": "#/$defs/id" }
+        "tone": {
+          "oneOf": [
+            { "$ref": "#/$defs/id" },
+            { "type": "null" }
+          ]
+        },
+        "phase": { "enum": ["ordinary", "triodion", "pentecostarion"] }
       }
     },
     "derivations": {

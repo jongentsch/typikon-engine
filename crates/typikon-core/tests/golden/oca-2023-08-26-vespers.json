@@ -6,7 +6,6 @@
   "request": {
     "civil_date": "2023-08-26",
     "service": "great_vespers",
-    "phase": "ordinary",
     "observances": ["pimen-great"]
   },
   "day": {
@@ -50,8 +49,12 @@
     {
       "id": "derivation-0005",
       "component": "phase",
-      "method": "caller_supplied",
-      "inputs": {},
+      "method": "paschal_cycle_window",
+      "inputs": {
+        "pascha": "2023-04-16",
+        "pentecostarion_end": "2023-06-11",
+        "triodion_start": "2023-02-05"
+      },
       "output": "ordinary"
     },
     {

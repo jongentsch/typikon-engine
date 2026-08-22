@@ -36,7 +36,8 @@ OCA data remain external runtime inputs.
    date.
 2. Project the liturgical date into the pack's Gregorian, Revised Julian, or
    Julian fixed calendar.
-3. Calculate Orthodox Pascha and the pack-mapped Octoechos tone.
+3. Calculate Orthodox Pascha, the Paschal-cycle phase, and the pack-mapped
+   Octoechos tone when that ordinary cycle is active.
 4. Compute the liturgical weekday.
 5. Use explicitly selected observances, or discover fixed-date observances in
    the projected calendar.
@@ -64,7 +65,6 @@ engine branch and does not change the Julian-based Orthodox Paschalion. See the
 ## Deliberately deferred
 
 - conjunction, precedence, transfer, vigil, and discretionary-choice models;
-- Triodion/Pentecostarion phase derivation and special-period tone semantics;
 - native ABI, WASM, Python, and other wrappers.
 
 These are deferred rather than represented by guessed abstractions.
