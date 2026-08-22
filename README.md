@@ -18,6 +18,10 @@ ordinary Saturday-evening Great Vespers, `Lord, I Call`, with its stichera,
 `Glory`, and `Both now` slots. The example GOARCH and OCA packs are small
 research fixtures, not usable or complete typika.
 
+Evidence is categorized as a retrievable `source`, a reusable `scoped_claim`,
+or a date-specific `dated_witness`; authoritative standing versus observed
+behavior is recorded separately.
+
 ## Try the spike
 
 ```console

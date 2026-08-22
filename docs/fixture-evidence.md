@@ -1,8 +1,9 @@
 # Fixture evidence
 
-Research was checked on 2026-08-22. Pack observances cite the dated records
-below by authority ID; compiled decisions combine those observance authorities
-with any general rule authority.
+Research was checked on 2026-08-22. Pack observances cite the `dated_witness`
+records below by authority ID. Reusable rules cite `scoped_claim` records,
+which in turn cite their `source` records. Compiled decisions combine scoped
+claims with the dated witnesses that confirm the resolved case.
 
 ## GOARCH dated observations
 
@@ -20,9 +21,10 @@ Octoechos `Both now` Theotokion in plagal fourth mode.
 
 Source: <https://dcs.goarch.org/goa/dcs/h/s/2026/08/01/ve/en/index.html>
 
-Both fixtures are labeled `observed_behavior`. DCS is production evidence, not
-the asserted authority explaining the underlying rubric. The rank string and
-rule shape remain experimental pending review against rubrical sources and a
+Both fixtures are categorized `dated_witness` and labeled
+`observed_behavior`. DCS is production evidence for those dates, not the
+asserted authority explaining the underlying rubric. The rank string and rule
+shape remain experimental pending review against rubrical sources and a
 knowledgeable priest.
 
 ## OCA ordinary-Sunday cases
@@ -37,6 +39,10 @@ Vespers at a Sunday vigil, outside a forefeast or afterfeast, states:
 
 Source: <https://www.oca.org/liturgics/outlines/great-vespers-at-vigil-sun>
 
+The pack represents the page itself as a `source` and its ordinary-Sunday
+allocation as a separate `scoped_claim`. Both OCA rules cite the claim rather
+than treating either dated service order as the rule's general authority.
+
 The dated OCA order for Sunday, 2023-08-27 instantiates the lesser-saint case
 for Venerable Pimen the Great in Tone 3: seven resurrectional stichera, three
 for the saint, the saint's `Glory`, and the Tone 3 dogmatikon at `Now`.
@@ -50,9 +56,10 @@ resurrectional stichera, four for the commemoration, its `Glory`, and the Tone
 
 Source: <https://www.oca.org/PDF/Music/Rubrics/2026-0906-order-services.docx>
 
-Both official DOCX files were rendered to five pages with LibreOffice 26.2.5.2
-and Poppler 26.02.0-0. All ten rendered pages were inspected at original detail
-to verify the cited service-order text and document integrity.
+Both orders are categorized as authoritative `dated_witness` records. Their
+official DOCX files were rendered to five pages with LibreOffice 26.2.5.2 and
+Poppler 26.02.0-0. All ten rendered pages were inspected at original detail to
+verify the cited service-order text and document integrity.
 
 The OCA rank glossary separately identifies `Six Stichera` and `Ordinary Day`
 as distinct rank classes:

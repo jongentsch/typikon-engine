@@ -84,7 +84,7 @@ fn oca_pimen_case_matches_published_seven_plus_three_case() {
     assert_eq!(plan.day.liturgical_date, "2023-08-27");
     assert_eq!(
         plan.decisions[0].authority,
-        ["oca-great-vespers-sunday-outline", "oca-order-2023-08-27"]
+        ["oca-ordinary-sunday-lord-i-call", "oca-order-2023-08-27"]
     );
 }
 
@@ -98,7 +98,7 @@ fn oca_archangel_michael_case_matches_published_six_plus_four_case() {
     assert_eq!(plan.day.liturgical_date, "2026-09-06");
     assert_eq!(
         plan.decisions[0].authority,
-        ["oca-great-vespers-sunday-outline", "oca-order-2026-09-06"]
+        ["oca-ordinary-sunday-lord-i-call", "oca-order-2026-09-06"]
     );
 }
 

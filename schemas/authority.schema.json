@@ -4,7 +4,7 @@
   "title": "Typikon evidence authority",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "id", "title", "kind"],
+  "required": ["schema", "id", "title", "category", "kind"],
   "properties": {
     "schema": { "const": "typikon.authority/v0.1" },
     "id": { "$ref": "#/$defs/id" },

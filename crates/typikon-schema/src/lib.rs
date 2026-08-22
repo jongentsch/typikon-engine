@@ -176,7 +176,6 @@ pub struct AuthorityDefinition {
     pub schema: String,
     pub id: String,
     pub title: String,
-    #[serde(default)]
     pub category: AuthorityCategory,
     pub kind: AuthorityKind,
     #[serde(default)]
@@ -191,10 +190,9 @@ pub struct AuthorityDefinition {
     pub reference: Option<AuthorityReference>,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthorityCategory {
-    #[default]
     Source,
     ScopedClaim,
     DatedWitness,

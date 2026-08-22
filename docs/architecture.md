@@ -41,7 +41,8 @@ OCA data remain external runtime inputs.
    no expression language.
 6. Validate every emitted section and slot against the service definition.
 7. Reject collisions in `optional` and `one` slots as ambiguity.
-8. Return items plus combined rule and observance authority provenance.
+8. Return items plus combined scoped-claim and dated-witness provenance. A
+   scoped claim links back to the source records from which it was derived.
 
 Rules and loaded records are held in ordered maps. Observances are sorted, and
 decisions are numbered in deterministic evaluation order.
