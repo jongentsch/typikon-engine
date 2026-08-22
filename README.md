@@ -76,11 +76,22 @@ target separately from the standalone suite.
   and reference validation.
 - `typikon-core`: pure, deterministic matching and plan assembly.
 - `typikon-cli`: filesystem-backed development harness.
+- `typikon-ffi`: minimal `cdylib`/`staticlib` C ABI over UTF-8 JSON.
 
 `typikon-core::Engine::compile_service_json` is the versioned, deterministic
 UTF-8 JSON boundary intended for non-Rust wrappers. Requests identify
 `typikon.request/v0.1`; results identify `typikon.plan/v0.1` and are validated
 before being returned.
+
+Build and exercise the native ABI from Python with:
+
+```console
+cargo build --release -p typikon-ffi
+python examples/ffi_smoke.py target/release/typikon_ffi.dll
+```
+
+Linux uses `target/release/libtypikon_ffi.so`; macOS uses
+`target/release/libtypikon_ffi.dylib`.
 
 The core receives a validated in-memory definition model. It neither reads the
 filesystem nor fetches the network. See [architecture](docs/architecture.md),

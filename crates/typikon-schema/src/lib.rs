@@ -10,8 +10,17 @@ pub const SERVICE_SCHEMA: &str = "typikon.service/v0.1";
 pub const OBSERVANCE_SCHEMA: &str = "typikon.observance/v0.1";
 pub const RULE_SCHEMA: &str = "typikon.rule/v0.1";
 pub const AUTHORITY_SCHEMA: &str = "typikon.authority/v0.1";
+pub const FFI_RESPONSE_SCHEMA: &str = "typikon.ffi-response/v0.1";
 pub const REQUEST_SCHEMA: &str = "typikon.request/v0.1";
+pub const RESOURCE_BUNDLE_SCHEMA: &str = "typikon.resource-bundle/v0.1";
 pub const PLAN_SCHEMA: &str = "typikon.plan/v0.1";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceBundle {
+    pub schema: String,
+    pub files: BTreeMap<String, String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

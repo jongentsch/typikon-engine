@@ -69,6 +69,6 @@ engine branch and does not change the Julian-based Orthodox Paschalion. See the
 ## Deliberately deferred
 
 - conjunction, precedence, transfer, vigil, and discretionary-choice models;
-- native ABI, WASM, Python, and other wrappers.
+- WebAssembly and mature language-specific wrapper packages.
 
 These are deferred rather than represented by guessed abstractions.

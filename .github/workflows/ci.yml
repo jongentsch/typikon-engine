@@ -29,6 +29,10 @@ jobs:
         run: cargo test --workspace --locked
       - name: Check loader without filesystem support
         run: cargo check -p typikon-loader --lib --no-default-features --locked
+      - name: Build native ABI
+        run: cargo build --release -p typikon-ffi --locked
+      - name: Smoke native ABI from Python
+        run: python3 examples/ffi_smoke.py target/release/libtypikon_ffi.so
       - name: Build documentation
         env:
           RUSTDOCFLAGS: -D warnings

@@ -16,7 +16,10 @@ const SERVICE_JSON_SCHEMA: &str = include_str!("../../../schemas/service.schema.
 const OBSERVANCE_JSON_SCHEMA: &str = include_str!("../../../schemas/observance.schema.json");
 const RULE_JSON_SCHEMA: &str = include_str!("../../../schemas/rule.schema.json");
 const AUTHORITY_JSON_SCHEMA: &str = include_str!("../../../schemas/authority.schema.json");
+const FFI_RESPONSE_JSON_SCHEMA: &str = include_str!("../../../schemas/ffi-response.schema.json");
 const REQUEST_JSON_SCHEMA: &str = include_str!("../../../schemas/request.schema.json");
+const RESOURCE_BUNDLE_JSON_SCHEMA: &str =
+    include_str!("../../../schemas/resource-bundle.schema.json");
 const PLAN_JSON_SCHEMA: &str = include_str!("../../../schemas/plan.schema.json");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +29,9 @@ pub enum SchemaKind {
     Observance,
     Rule,
     Authority,
+    FfiResponse,
     Request,
+    ResourceBundle,
     Plan,
 }
 
@@ -38,7 +43,9 @@ impl SchemaKind {
             Self::Observance => OBSERVANCE_JSON_SCHEMA,
             Self::Rule => RULE_JSON_SCHEMA,
             Self::Authority => AUTHORITY_JSON_SCHEMA,
+            Self::FfiResponse => FFI_RESPONSE_JSON_SCHEMA,
             Self::Request => REQUEST_JSON_SCHEMA,
+            Self::ResourceBundle => RESOURCE_BUNDLE_JSON_SCHEMA,
             Self::Plan => PLAN_JSON_SCHEMA,
         }
     }
@@ -50,7 +57,9 @@ impl SchemaKind {
             Self::Observance => "observance",
             Self::Rule => "rule",
             Self::Authority => "authority",
+            Self::FfiResponse => "FFI response",
             Self::Request => "request",
+            Self::ResourceBundle => "resource bundle",
             Self::Plan => "plan",
         }
     }
@@ -661,8 +670,8 @@ fn has_yaml_extension(path: &Path) -> bool {
 mod tests {
     use super::*;
     use typikon_schema::{
-        AUTHORITY_SCHEMA, OBSERVANCE_SCHEMA, PACK_SCHEMA, REQUEST_SCHEMA, RULE_SCHEMA,
-        SERVICE_SCHEMA,
+        AUTHORITY_SCHEMA, FFI_RESPONSE_SCHEMA, OBSERVANCE_SCHEMA, PACK_SCHEMA, REQUEST_SCHEMA,
+        RESOURCE_BUNDLE_SCHEMA, RULE_SCHEMA, SERVICE_SCHEMA,
     };
 
     #[test]
@@ -682,7 +691,9 @@ mod tests {
             (SchemaKind::Observance, OBSERVANCE_SCHEMA),
             (SchemaKind::Rule, RULE_SCHEMA),
             (SchemaKind::Authority, AUTHORITY_SCHEMA),
+            (SchemaKind::FfiResponse, FFI_RESPONSE_SCHEMA),
             (SchemaKind::Request, REQUEST_SCHEMA),
+            (SchemaKind::ResourceBundle, RESOURCE_BUNDLE_SCHEMA),
         ];
         for (kind, expected) in expectations {
             let schema: Value = serde_json::from_str(kind.document_schema()).unwrap();

@@ -909,6 +909,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "typikon-ffi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "typikon-core",
+ "typikon-loader",
+ "typikon-schema",
+]
+
+[[package]]
 name = "typikon-loader"
 version = "0.1.0"
 dependencies = [

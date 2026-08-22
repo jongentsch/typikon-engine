@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://typikon.dev/schema/resource-bundle/v0.1",
+  "title": "Typikon UTF-8 resource bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "files"],
+  "properties": {
+    "schema": { "const": "typikon.resource-bundle/v0.1" },
+    "files": {
+      "type": "object",
+      "required": ["pack.yaml"],
+      "propertyNames": {
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+      },
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}

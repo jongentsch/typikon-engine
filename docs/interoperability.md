@@ -22,17 +22,25 @@ performs fixed-date discovery. The compiled plan preserves that exact caller
 intent. Automatically selected observances appear in the result with a
 `selection_derivation`; they are not rewritten into the recorded request.
 
-A native boundary can therefore expose operations equivalent to:
+The `typikon-ffi` crate now builds `cdylib` and `staticlib` artifacts and exports
+exactly two C functions (declared in `crates/typikon-ffi/include/typikon.h`):
 
-```text
-validate_pack(pack_resource_json) -> result_json
-compile_service(pack_resource_json, request_json) -> plan_json
-free_string(pointer)
+```c
+char *typikon_compile(const char *resource_bundle_json, const char *request_json);
+void typikon_string_free(char *value);
 ```
 
-No Rust layout, borrowed pointer, or internal object graph should cross that
-boundary. A `cdylib`/`staticlib` wrapper can depend on `typikon-core` without
-changing it.
+The first input conforms to `typikon.resource-bundle/v0.1`: a map of safe
+relative paths to UTF-8 YAML strings, including `pack.yaml`. The second conforms
+to `typikon.request/v0.1`. The returned allocation always contains a
+`typikon.ffi-response/v0.1` success or error envelope and must be released once
+with `typikon_string_free`. Null and invalid UTF-8 inputs become structured
+errors, and panics are caught before they can cross the ABI boundary.
+
+No Rust layout, borrowed pointer, filesystem path, or internal object graph
+crosses the boundary. `examples/ffi_smoke.py` is a non-Rust consumer using only
+Python's standard `ctypes` and `json` modules; CI builds the shared library and
+runs that consumer on Linux.
 
 For WebAssembly, a wrapper can construct a `MemoryResource` from JavaScript-
 supplied files, load it, compile, and serialize the plan. Filesystem support is

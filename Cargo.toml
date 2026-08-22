@@ -4,6 +4,7 @@ members = [
     "crates/typikon-loader",
     "crates/typikon-core",
     "crates/typikon-cli",
+    "crates/typikon-ffi",
 ]
 resolver = "2"
 

@@ -1,0 +1,8 @@
+schema: typikon.observance/v0.1
+id: test-saint
+name: Test saint
+date:
+  fixed:
+    month: 7
+    day: 26
+rank: test-rank

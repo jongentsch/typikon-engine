@@ -1,0 +1,9 @@
+schema: typikon.service/v0.1
+id: great_vespers
+name: Great Vespers
+liturgical_day_offset: 1
+sections:
+  - id: lord_i_call
+    slots:
+      - id: stichera
+        cardinality: many
