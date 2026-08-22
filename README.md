@@ -30,16 +30,15 @@ cargo run -p typikon-cli -- compile-service \
   --tone grave
 ```
 
-The OCA pack contains two context fixtures that intentionally do not claim a
-calendar date. Select one explicitly:
+The OCA pack contains two dated fixtures grounded in official service orders.
+The calendar selects the matching observance automatically:
 
 ```console
 cargo run -p typikon-cli -- compile-service \
   --pack ../typikon-oca \
-  --date 2026-08-22 \
+  --date 2023-08-26 \
   --service great_vespers \
-  --tone tone_3 \
-  --observance lesser-saint-context
+  --tone tone_3
 ```
 
 Run the complete verification suite with:
