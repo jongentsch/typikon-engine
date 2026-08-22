@@ -1,0 +1,59 @@
+{
+  "schema": "typikon.plan/v0.1",
+  "engine_version": "0.1.0",
+  "status": "complete",
+  "pack": { "id": "goarch-experimental", "version": "0.1.0" },
+  "request": {
+    "civil_date": "2026-07-25",
+    "service": "great_vespers",
+    "tone": "grave",
+    "phase": "ordinary",
+    "observances": ["paraskevi-rome"]
+  },
+  "day": {
+    "liturgical_date": "2026-07-26",
+    "weekday": "sunday",
+    "tone": "grave",
+    "phase": "ordinary"
+  },
+  "observances": [
+    { "id": "paraskevi-rome", "name": "St Paraskevi of Rome", "rank": "six-stichera" }
+  ],
+  "sections": [
+    {
+      "id": "lord_i_call",
+      "items": [
+        {
+          "slot": "stichera",
+          "count": 6,
+          "material": { "source": "octoechos", "kind": "sticheron", "role": "resurrectional", "tone": "grave" },
+          "decision": "decision-0001"
+        },
+        {
+          "slot": "stichera",
+          "count": 4,
+          "material": { "source": "observance", "kind": "sticheron", "role": "festal", "observance": "paraskevi-rome" },
+          "decision": "decision-0001"
+        },
+        {
+          "slot": "glory",
+          "material": { "source": "observance", "kind": "sticheron", "role": "doxastikon", "observance": "paraskevi-rome" },
+          "decision": "decision-0001"
+        },
+        {
+          "slot": "both_now",
+          "material": { "source": "octoechos", "kind": "theotokion", "tone": "plagal_second" },
+          "decision": "decision-0001"
+        }
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "decision-0001",
+      "rule": "ordinary-sunday-six-stichera",
+      "authority": ["goarch-dcs-2026-07-25-vespers"],
+      "observance": "paraskevi-rome"
+    }
+  ]
+}

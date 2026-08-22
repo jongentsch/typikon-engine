@@ -1,0 +1,31 @@
+[workspace]
+members = [
+    "crates/typikon-schema",
+    "crates/typikon-loader",
+    "crates/typikon-core",
+    "crates/typikon-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "LicenseRef-Pending"
+repository = "https://github.com/jongentsch/typikon-engine"
+
+[workspace.dependencies]
+chrono = { version = "0.4.41", default-features = false, features = ["std"] }
+clap = { version = "4.5.45", features = ["derive"] }
+jsonschema = { version = "0.33.0", default-features = false }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.143"
+serde_yaml_ng = "0.10.0"
+thiserror = "2.0.16"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

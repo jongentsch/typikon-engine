@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://typikon.dev/schema/plan/v0.1",
+  "title": "Compiled Typikon plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "engine_version", "status", "pack", "request", "day", "observances", "sections", "decisions"],
+  "properties": {
+    "schema": { "const": "typikon.plan/v0.1" },
+    "engine_version": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["complete", "requires_review"] },
+    "pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "version": { "type": "string" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["civil_date", "service", "tone", "phase", "observances"],
+      "properties": {
+        "civil_date": { "type": "string", "format": "date" },
+        "service": { "$ref": "#/$defs/id" },
+        "tone": { "$ref": "#/$defs/id" },
+        "phase": { "$ref": "#/$defs/id" },
+        "observances": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "day": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["liturgical_date", "weekday", "tone", "phase"],
+      "properties": {
+        "liturgical_date": { "type": "string", "format": "date" },
+        "weekday": { "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] },
+        "tone": { "$ref": "#/$defs/id" },
+        "phase": { "$ref": "#/$defs/id" }
+      }
+    },
+    "observances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "rank"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "name": { "type": "string" },
+          "rank": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "items"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["slot", "material", "decision"],
+              "properties": {
+                "slot": { "$ref": "#/$defs/id" },
+                "count": { "type": "integer", "minimum": 1 },
+                "material": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/scalar" } },
+                "decision": { "$ref": "#/$defs/id" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "rule", "authority"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "rule": { "$ref": "#/$defs/id" },
+          "authority": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+          "observance": { "$ref": "#/$defs/id" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[a-z0-9_-]*[a-z0-9])?$" },
+    "scalar": { "type": ["string", "number", "boolean", "null"] }
+  }
+}

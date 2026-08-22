@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://typikon.dev/schema/observance/v0.1",
+  "title": "Typikon observance definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "name", "rank"],
+  "properties": {
+    "schema": { "const": "typikon.observance/v0.1" },
+    "id": { "$ref": "#/$defs/id" },
+    "name": { "type": "string", "minLength": 1 },
+    "date": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixed"],
+      "properties": {
+        "fixed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["month", "day"],
+          "properties": {
+            "month": { "type": "integer", "minimum": 1, "maximum": 12 },
+            "day": { "type": "integer", "minimum": 1, "maximum": 31 }
+          }
+        }
+      }
+    },
+    "rank": { "$ref": "#/$defs/id" },
+    "properties": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/scalar" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[a-z0-9_-]*[a-z0-9])?$" },
+    "scalar": { "type": ["string", "number", "boolean", "null"] }
+  }
+}

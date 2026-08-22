@@ -1,0 +1,65 @@
+# Typikon Engine
+
+`typikon-engine` is the Rust-engine repository in a three-repository project:
+
+- `typikon-engine/` (this directory): generic loader, evaluator, CLI, and schemas;
+- `typikon-goarch/`: external experimental GOARCH runtime resource pack;
+- `typikon-oca/`: external experimental OCA runtime resource pack.
+
+It is a schema-first Rust spike for a reusable Orthodox Typikon
+Engine / liturgical compiler. It loads versioned, human-maintained tradition
+definitions at runtime and produces deterministic semantic plans. It does not
+ship liturgical texts or encode a jurisdiction's rules in Rust.
+
+The present milestone deliberately covers only one service fragment:
+ordinary Saturday-evening Great Vespers, `Lord, I Call`, with its stichera,
+`Glory`, and `Both now` slots. The example GOARCH and OCA packs are small
+research fixtures, not usable or complete typika.
+
+## Try the spike
+
+```console
+cargo run -p typikon-cli -- validate ../typikon-goarch
+
+cargo run -p typikon-cli -- compile-service \
+  --pack ../typikon-goarch \
+  --date 2026-07-25 \
+  --service great_vespers \
+  --tone grave
+```
+
+The OCA pack contains two context fixtures that intentionally do not claim a
+calendar date. Select one explicitly:
+
+```console
+cargo run -p typikon-cli -- compile-service \
+  --pack ../typikon-oca \
+  --date 2026-08-22 \
+  --service great_vespers \
+  --tone tone_3 \
+  --observance lesser-saint-context
+```
+
+Run the complete verification suite with:
+
+```console
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+## Workspace boundary
+
+- `typikon-schema`: language-neutral contract represented as Rust data types.
+- `typikon-loader`: resource abstraction, YAML parsing, JSON Schema validation,
+  and reference validation.
+- `typikon-core`: pure, deterministic matching and plan assembly.
+- `typikon-cli`: filesystem-backed development harness.
+
+The core receives a validated in-memory definition model. It neither reads the
+filesystem nor fetches the network. See [architecture](docs/architecture.md),
+[schema philosophy](docs/schema-philosophy.md), and [fixture evidence](docs/fixture-evidence.md).
+
+## License
+
+License selection is pending. Apache-2.0, MPL-2.0, and GPL-3.0 remain under
+consideration; no license has been selected by this spike.
