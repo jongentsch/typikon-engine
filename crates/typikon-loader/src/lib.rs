@@ -7,8 +7,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use thiserror::Error;
 use typikon_schema::{
-    AuthorityCategory, AuthorityDefinition, ObservanceDate, ObservanceDefinition, PackDefinition,
-    RuleDefinition, ServiceDefinition,
+    AuthorityCategory, AuthorityDefinition, LiturgicalResourceDefinition, ObservanceDate,
+    ObservanceDefinition, PackDefinition, RuleDefinition, ServiceDefinition,
 };
 
 const PACK_JSON_SCHEMA: &str = include_str!("../../../schemas/pack.schema.json");
@@ -16,6 +16,7 @@ const SERVICE_JSON_SCHEMA: &str = include_str!("../../../schemas/service.schema.
 const OBSERVANCE_JSON_SCHEMA: &str = include_str!("../../../schemas/observance.schema.json");
 const RULE_JSON_SCHEMA: &str = include_str!("../../../schemas/rule.schema.json");
 const AUTHORITY_JSON_SCHEMA: &str = include_str!("../../../schemas/authority.schema.json");
+const RESOURCE_JSON_SCHEMA: &str = include_str!("../../../schemas/resource.schema.json");
 const FFI_RESPONSE_JSON_SCHEMA: &str = include_str!("../../../schemas/ffi-response.schema.json");
 const REQUEST_JSON_SCHEMA: &str = include_str!("../../../schemas/request.schema.json");
 const RESOURCE_BUNDLE_JSON_SCHEMA: &str =
@@ -29,6 +30,7 @@ pub enum SchemaKind {
     Observance,
     Rule,
     Authority,
+    Resource,
     FfiResponse,
     Request,
     ResourceBundle,
@@ -43,6 +45,7 @@ impl SchemaKind {
             Self::Observance => OBSERVANCE_JSON_SCHEMA,
             Self::Rule => RULE_JSON_SCHEMA,
             Self::Authority => AUTHORITY_JSON_SCHEMA,
+            Self::Resource => RESOURCE_JSON_SCHEMA,
             Self::FfiResponse => FFI_RESPONSE_JSON_SCHEMA,
             Self::Request => REQUEST_JSON_SCHEMA,
             Self::ResourceBundle => RESOURCE_BUNDLE_JSON_SCHEMA,
@@ -57,6 +60,7 @@ impl SchemaKind {
             Self::Observance => "observance",
             Self::Rule => "rule",
             Self::Authority => "authority",
+            Self::Resource => "liturgical resource",
             Self::FfiResponse => "FFI response",
             Self::Request => "request",
             Self::ResourceBundle => "resource bundle",
@@ -256,6 +260,7 @@ pub struct LoadedPack {
     pub pack: Sourced<PackDefinition>,
     pub services: BTreeMap<String, Sourced<ServiceDefinition>>,
     pub observances: BTreeMap<String, Sourced<ObservanceDefinition>>,
+    pub resources: BTreeMap<String, Sourced<LiturgicalResourceDefinition>>,
     pub rules: BTreeMap<String, Sourced<RuleDefinition>>,
     pub authorities: BTreeMap<String, Sourced<AuthorityDefinition>>,
 }
@@ -334,6 +339,12 @@ pub fn load_pack(resource: &impl TraditionResource) -> Result<LoadedPack, Loader
         SchemaKind::Observance,
         |value: &ObservanceDefinition| &value.id,
     )?;
+    let resources = load_collection(
+        resource,
+        &pack.value.definitions.resources,
+        SchemaKind::Resource,
+        |value: &LiturgicalResourceDefinition| &value.id,
+    )?;
     let rules = load_collection(
         resource,
         &pack.value.definitions.rules,
@@ -358,6 +369,7 @@ pub fn load_pack(resource: &impl TraditionResource) -> Result<LoadedPack, Loader
         pack,
         services,
         observances,
+        resources,
         rules,
         authorities,
     };
@@ -472,8 +484,25 @@ where
 fn validate_references(pack: &LoadedPack) -> Result<(), LoaderError> {
     validate_service_shapes(pack)?;
     validate_authority_graph(pack)?;
+    validate_resource_references(pack)?;
     validate_observance_dates(pack)?;
     validate_rule_references(pack)
+}
+
+fn validate_resource_references(pack: &LoadedPack) -> Result<(), LoaderError> {
+    for sourced in pack.resources.values() {
+        for authority in &sourced.value.authority {
+            if !pack.authorities.contains_key(authority) {
+                return Err(LoaderError::UnknownReference {
+                    path: sourced.source.clone(),
+                    owner: sourced.value.id.clone(),
+                    kind: "authority",
+                    id: authority.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_authority_graph(pack: &LoadedPack) -> Result<(), LoaderError> {
@@ -551,6 +580,38 @@ fn validate_observance_dates(pack: &LoadedPack) -> Result<(), LoaderError> {
                 });
             }
         }
+        for (service_id, appointments) in &sourced.value.appointments {
+            if !pack.services.contains_key(service_id) {
+                return Err(LoaderError::UnknownReference {
+                    path: sourced.source.clone(),
+                    owner: sourced.value.id.clone(),
+                    kind: "appointment service",
+                    id: service_id.clone(),
+                });
+            }
+            for (role, resource_ids) in appointments {
+                for resource_id in resource_ids.as_slice() {
+                    let resource = pack.resources.get(resource_id).ok_or_else(|| {
+                        LoaderError::UnknownReference {
+                            path: sourced.source.clone(),
+                            owner: sourced.value.id.clone(),
+                            kind: "liturgical resource",
+                            id: resource_id.clone(),
+                        }
+                    })?;
+                    if resource.value.role != *role {
+                        return Err(LoaderError::Schema {
+                            path: sourced.source.clone(),
+                            kind: "observance",
+                            message: format!(
+                                "appointment role '{role}' does not match resource '{}' role '{}'",
+                                resource.value.id, resource.value.role
+                            ),
+                        });
+                    }
+                }
+            }
+        }
         if let ObservanceDate::Fixed { fixed } = &sourced.value.date {
             let max_day = match fixed.month {
                 2 => 29,
@@ -618,6 +679,13 @@ fn validate_rule_references(pack: &LoadedPack) -> Result<(), LoaderError> {
         }
 
         for emission in &rule.emit {
+            if emission.appointment.is_some() && rule.when.observance.is_none() {
+                return Err(LoaderError::Schema {
+                    path: sourced.source.clone(),
+                    kind: "rule",
+                    message: "appointment emissions require when.observance".to_owned(),
+                });
+            }
             let section = service
                 .value
                 .sections
@@ -671,7 +739,7 @@ mod tests {
     use super::*;
     use typikon_schema::{
         AUTHORITY_SCHEMA, FFI_RESPONSE_SCHEMA, OBSERVANCE_SCHEMA, PACK_SCHEMA, REQUEST_SCHEMA,
-        RESOURCE_BUNDLE_SCHEMA, RULE_SCHEMA, SERVICE_SCHEMA,
+        RESOURCE_BUNDLE_SCHEMA, RESOURCE_SCHEMA, RULE_SCHEMA, SERVICE_SCHEMA,
     };
 
     #[test]
@@ -691,6 +759,7 @@ mod tests {
             (SchemaKind::Observance, OBSERVANCE_SCHEMA),
             (SchemaKind::Rule, RULE_SCHEMA),
             (SchemaKind::Authority, AUTHORITY_SCHEMA),
+            (SchemaKind::Resource, RESOURCE_SCHEMA),
             (SchemaKind::FfiResponse, FFI_RESPONSE_SCHEMA),
             (SchemaKind::Request, REQUEST_SCHEMA),
             (SchemaKind::ResourceBundle, RESOURCE_BUNDLE_SCHEMA),

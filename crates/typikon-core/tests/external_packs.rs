@@ -157,11 +157,12 @@ fn assert_major_feast_services(pack_name: &str, bundle_prefix: &str) {
             assert_eq!(plan.sections[0].id, "propers");
             assert_eq!(plan.sections[0].items.len(), 1);
             let material = &plan.sections[0].items[0].material;
-            assert_eq!(material["kind"], "feast-propers");
-            assert_eq!(material["role"], "complete");
+            assert_eq!(material["source"], "resource");
+            assert_eq!(material["kind"], "service-bundle");
+            assert_eq!(material["role"], "complete-propers");
             assert_eq!(material["observance"], feast.id);
             assert_eq!(
-                material["bundle"],
+                material["resource"],
                 format!(
                     "{bundle_prefix}-{}-{bundle_service}{}",
                     feast.id,
@@ -171,6 +172,11 @@ fn assert_major_feast_services(pack_name: &str, bundle_prefix: &str) {
                         ""
                     }
                 )
+            );
+            assert!(
+                material["title"]
+                    .as_str()
+                    .is_some_and(|title| !title.is_empty())
             );
             assert!(
                 material["reference"]

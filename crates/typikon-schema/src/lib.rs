@@ -5,11 +5,12 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const PACK_SCHEMA: &str = "typikon.pack/v0.1";
+pub const PACK_SCHEMA: &str = "typikon.pack/v0.2";
 pub const SERVICE_SCHEMA: &str = "typikon.service/v0.1";
-pub const OBSERVANCE_SCHEMA: &str = "typikon.observance/v0.2";
-pub const RULE_SCHEMA: &str = "typikon.rule/v0.1";
+pub const OBSERVANCE_SCHEMA: &str = "typikon.observance/v0.3";
+pub const RULE_SCHEMA: &str = "typikon.rule/v0.2";
 pub const AUTHORITY_SCHEMA: &str = "typikon.authority/v0.1";
+pub const RESOURCE_SCHEMA: &str = "typikon.resource/v0.1";
 pub const FFI_RESPONSE_SCHEMA: &str = "typikon.ffi-response/v0.1";
 pub const REQUEST_SCHEMA: &str = "typikon.request/v0.1";
 pub const RESOURCE_BUNDLE_SCHEMA: &str = "typikon.resource-bundle/v0.1";
@@ -73,6 +74,7 @@ pub enum ToneCycleSystem {
 pub struct DefinitionDirectories {
     pub services: String,
     pub observances: String,
+    pub resources: String,
     pub rules: String,
     pub authorities: String,
 }
@@ -119,6 +121,8 @@ pub struct ObservanceDefinition {
     pub rank: String,
     #[serde(default)]
     pub authority: Vec<String>,
+    #[serde(default)]
+    pub appointments: BTreeMap<String, BTreeMap<String, OneOrMany>>,
     #[serde(default)]
     pub properties: BTreeMap<String, Value>,
 }
@@ -196,6 +200,14 @@ impl OneOrMany {
             Self::Many(values) => values.iter().any(|value| value == candidate),
         }
     }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[String] {
+        match self {
+            Self::One(value) => std::slice::from_ref(value),
+            Self::Many(values) => values,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -203,9 +215,26 @@ impl OneOrMany {
 pub struct EmissionDefinition {
     pub section: String,
     pub slot: String,
-    pub material: BTreeMap<String, Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<BTreeMap<String, Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appointment: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LiturgicalResourceDefinition {
+    pub schema: String,
+    pub id: String,
+    pub title: String,
+    pub kind: String,
+    pub role: String,
+    pub authority: Vec<String>,
+    pub reference: AuthorityReference,
+    #[serde(default)]
+    pub properties: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

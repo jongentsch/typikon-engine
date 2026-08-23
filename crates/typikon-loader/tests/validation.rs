@@ -19,13 +19,13 @@ fn unsupported_schema_version_fails_before_deserialization() {
     )]);
     let error = load_pack(&resource).unwrap_err();
     assert!(matches!(error, LoaderError::Schema { .. }));
-    assert!(error.to_string().contains("typikon.pack/v0.1"));
+    assert!(error.to_string().contains("typikon.pack/v0.2"));
 }
 
 #[test]
 fn observance_date_accepts_a_paschal_offset() {
     let observance = json!({
-        "schema": "typikon.observance/v0.2",
+        "schema": "typikon.observance/v0.3",
         "id": "palm-sunday",
         "name": "Palm Sunday",
         "date": { "paschal_offset": -7 },
@@ -44,7 +44,7 @@ fn observance_date_requires_exactly_one_supported_form() {
 
     for date in invalid_dates {
         let observance = json!({
-            "schema": "typikon.observance/v0.2",
+            "schema": "typikon.observance/v0.3",
             "id": "test",
             "name": "Test",
             "date": date,
@@ -56,7 +56,7 @@ fn observance_date_requires_exactly_one_supported_form() {
     }
 
     let missing_date = json!({
-        "schema": "typikon.observance/v0.2",
+        "schema": "typikon.observance/v0.3",
         "id": "test",
         "name": "Test",
         "rank": "test"
@@ -67,11 +67,57 @@ fn observance_date_requires_exactly_one_supported_form() {
 }
 
 #[test]
+fn rule_emission_requires_exactly_one_material_source() {
+    let base = json!({
+        "schema": "typikon.rule/v0.2",
+        "id": "test",
+        "when": { "service": "vespers", "observance": { "rank": "feast" } },
+        "emit": [{ "section": "propers", "slot": "feast" }]
+    });
+    assert!(validate_value(SchemaKind::Rule, "test.yaml", &base).is_err());
+
+    let mut both = base;
+    both["emit"][0]["material"] = json!({ "source": "test" });
+    both["emit"][0]["appointment"] = json!("complete-propers");
+    assert!(validate_value(SchemaKind::Rule, "test.yaml", &both).is_err());
+
+    let appointment = json!({
+        "schema": "typikon.rule/v0.2",
+        "id": "test",
+        "when": { "service": "vespers", "observance": { "rank": "feast" } },
+        "emit": [{
+            "section": "propers",
+            "slot": "feast",
+            "appointment": "complete-propers"
+        }]
+    });
+    validate_value(SchemaKind::Rule, "test.yaml", &appointment).unwrap();
+}
+
+#[test]
+fn liturgical_resource_contract_requires_evidence_and_a_role() {
+    let resource = json!({
+        "schema": "typikon.resource/v0.1",
+        "id": "nativity-vespers",
+        "title": "Nativity Vespers proper bundle",
+        "kind": "service-bundle",
+        "role": "complete-propers",
+        "authority": ["published-order"],
+        "reference": { "url": "https://example.test/nativity-vespers" }
+    });
+    validate_value(SchemaKind::Resource, "resource.yaml", &resource).unwrap();
+
+    let mut missing_authority = resource;
+    missing_authority["authority"] = json!([]);
+    assert!(validate_value(SchemaKind::Resource, "resource.yaml", &missing_authority).is_err());
+}
+
+#[test]
 fn observances_load_recursively_from_taxonomy_directories() {
     let files = BTreeMap::from([
         (
             "pack.yaml".to_owned(),
-            br"schema: typikon.pack/v0.1
+            br"schema: typikon.pack/v0.2
 id: test
 name: Test
 version: 0.1.0
@@ -84,6 +130,7 @@ calendar:
 definitions:
   services: services/
   observances: observances/
+  resources: resources/
   rules: rules/
   authorities: authorities/
 "
@@ -105,7 +152,7 @@ sections:
         ),
         (
             "observances/feasts/major/nativity-christ.yaml".to_owned(),
-            br"schema: typikon.observance/v0.2
+            br"schema: typikon.observance/v0.3
 id: nativity-christ
 name: Nativity of Christ
 date:
@@ -118,7 +165,7 @@ rank: major-feast
         ),
         (
             "rules/vespers.yaml".to_owned(),
-            br"schema: typikon.rule/v0.1
+            br"schema: typikon.rule/v0.2
 id: vespers
 when:
   service: vespers
@@ -149,7 +196,7 @@ fn an_unknown_emission_slot_names_the_rule_and_slot() {
     let files = BTreeMap::from([
         (
             "pack.yaml".to_owned(),
-            br"schema: typikon.pack/v0.1
+            br"schema: typikon.pack/v0.2
 id: test
 name: Test
 version: 0.1.0
@@ -162,6 +209,7 @@ calendar:
 definitions:
   services: services/
   observances: observances/
+  resources: resources/
   rules: rules/
   authorities: authorities/
 "
@@ -183,7 +231,7 @@ sections:
         ),
         (
             "rules/bad.yaml".to_owned(),
-            br"schema: typikon.rule/v0.1
+            br"schema: typikon.rule/v0.2
 id: bad-rule
 when:
   service: vespers

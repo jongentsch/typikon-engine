@@ -1,4 +1,4 @@
-schema: typikon.pack/v0.1
+schema: typikon.pack/v0.2
 id: ffi-test
 name: FFI test
 version: 0.1.0
@@ -19,5 +19,6 @@ calendar:
 definitions:
   services: services/
   observances: observances/
+  resources: resources/
   rules: rules/
   authorities: authorities/

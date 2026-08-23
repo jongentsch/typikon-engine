@@ -1,4 +1,4 @@
-schema: typikon.rule/v0.1
+schema: typikon.rule/v0.2
 id: ordinary
 when:
   service: great_vespers

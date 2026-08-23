@@ -13,7 +13,7 @@ fn synthetic_pack() -> typikon_loader::LoadedPack {
     let files = BTreeMap::from([
         (
             "pack.yaml".to_owned(),
-            r"schema: typikon.pack/v0.1
+            r"schema: typikon.pack/v0.2
 id: synthetic
 name: Synthetic engine test pack
 version: 0.1.0
@@ -34,6 +34,7 @@ calendar:
 definitions:
   services: services/
   observances: observances/
+  resources: resources/
   rules: rules/
   authorities: authorities/
 "
@@ -61,7 +62,7 @@ sections:
         ),
         (
             "observances/primary.yaml".to_owned(),
-            r"schema: typikon.observance/v0.2
+            r"schema: typikon.observance/v0.3
 id: primary-context
 name: Primary context
 date:
@@ -71,6 +72,9 @@ date:
 rank: six-stichera
 authority:
   - synthetic-observation
+appointments:
+  great_vespers:
+    doxastikon: primary-context-doxastikon
 properties:
   has_glory: true
   glory_tone: tone_6
@@ -80,7 +84,7 @@ properties:
         ),
         (
             "observances/blocking.yaml".to_owned(),
-            r"schema: typikon.observance/v0.2
+            r"schema: typikon.observance/v0.3
 id: blocking-context
 name: Blocking context
 date:
@@ -94,7 +98,7 @@ rank: blocking
         ),
         (
             "rules/ordinary.yaml".to_owned(),
-            r"schema: typikon.rule/v0.1
+            r"schema: typikon.rule/v0.2
 id: ordinary-rule
 when:
   service: great_vespers
@@ -122,9 +126,7 @@ emit:
     count: 4
   - section: lord_i_call
     slot: glory
-    material:
-      source: observance
-      role: doxastikon
+    appointment: doxastikon
   - section: lord_i_call
     slot: both_now
     material:
@@ -133,6 +135,23 @@ emit:
       tone: $observance.properties.glory_tone
 authority:
   - synthetic-authority
+"
+            .as_bytes()
+            .to_vec(),
+        ),
+        (
+            "resources/primary-context-doxastikon.yaml".to_owned(),
+            r"schema: typikon.resource/v0.1
+id: primary-context-doxastikon
+title: Primary context doxastikon
+kind: hymn
+role: doxastikon
+authority:
+  - synthetic-observation
+reference:
+  url: https://example.test/witness
+properties:
+  genre: doxastikon
 "
             .as_bytes()
             .to_vec(),
@@ -219,6 +238,14 @@ fn synthetic_pack_compiles_a_schema_valid_plan() {
     assert!(plan.request.observances.is_empty());
     assert_eq!(plan.sections[0].items[0].count, Some(6));
     assert_eq!(plan.sections[0].items[1].count, Some(4));
+    let appointed = &plan.sections[0].items[2].material;
+    assert_eq!(appointed["source"], "resource");
+    assert_eq!(appointed["resource"], "primary-context-doxastikon");
+    assert_eq!(appointed["kind"], "hymn");
+    assert_eq!(appointed["role"], "doxastikon");
+    assert_eq!(appointed["reference"], "https://example.test/witness");
+    assert_eq!(appointed["observance"], "primary-context");
+    assert_eq!(appointed["genre"], "doxastikon");
     assert_eq!(plan.decisions[0].rule, "ordinary-rule");
     assert_eq!(
         plan.decisions[0].authority,
@@ -385,11 +412,12 @@ fn bright_week_plan_exposes_suspended_tone_without_fabricating_one() {
     for emission in &mut rule.emit {
         if emission
             .material
-            .get("tone")
+            .as_ref()
+            .and_then(|material| material.get("tone"))
             .and_then(serde_json::Value::as_str)
             == Some("$day.tone")
         {
-            emission.material.insert(
+            emission.material.as_mut().unwrap().insert(
                 "tone".to_owned(),
                 serde_json::Value::String("paschal".to_owned()),
             );

@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://typikon.dev/schema/rule/v0.1",
+  "$id": "https://typikon.dev/schema/rule/v0.2",
   "title": "Typikon rule definition",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "id", "when", "emit"],
   "properties": {
-    "schema": { "const": "typikon.rule/v0.1" },
+    "schema": { "const": "typikon.rule/v0.2" },
     "id": { "$ref": "#/$defs/id" },
     "when": { "$ref": "#/$defs/whenPredicate" },
     "unless": { "$ref": "#/$defs/predicate" },
@@ -16,7 +16,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["section", "slot", "material"],
+        "required": ["section", "slot"],
+        "oneOf": [
+          { "required": ["material"] },
+          { "required": ["appointment"] }
+        ],
         "properties": {
           "section": { "$ref": "#/$defs/id" },
           "slot": { "$ref": "#/$defs/id" },
@@ -25,6 +29,7 @@
             "minProperties": 1,
             "additionalProperties": { "$ref": "#/$defs/scalar" }
           },
+          "appointment": { "$ref": "#/$defs/id" },
           "count": { "type": "integer", "minimum": 1 }
         }
       }

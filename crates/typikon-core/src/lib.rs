@@ -11,12 +11,13 @@ use calendar::{
 use chrono::{Datelike, Duration, NaiveDate};
 use serde_json::Value;
 use thiserror::Error;
-use typikon_loader::{LoadedPack, SchemaKind, validate_value};
+use typikon_loader::{LoadedPack, SchemaKind, Sourced, validate_value};
 use typikon_schema::{
-    CalendarDefinition, CompileServiceRequest, DayPredicate, Decision, LiturgicalDay,
-    ObservanceDate, ObservanceDefinition, ObservancePredicate, PLAN_SCHEMA, Plan, PlanDerivation,
-    PlanItem, PlanObservance, PlanPack, PlanSection, PlanStatus, REQUEST_SCHEMA, RuleDefinition,
-    RulePredicate, ServiceDefinition, SlotCardinality,
+    CalendarDefinition, CompileServiceRequest, DayPredicate, Decision, EmissionDefinition,
+    LiturgicalDay, LiturgicalResourceDefinition, ObservanceDate, ObservanceDefinition,
+    ObservancePredicate, PLAN_SCHEMA, Plan, PlanDerivation, PlanItem, PlanObservance, PlanPack,
+    PlanSection, PlanStatus, REQUEST_SCHEMA, RuleDefinition, RulePredicate, ServiceDefinition,
+    SlotCardinality,
 };
 
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -216,7 +217,15 @@ impl Engine {
                     predicate_matches(unless, service_id, day, None, observances)
                 });
                 if matches && !excluded {
-                    emit_rule_match(rule, service, day, candidate, &mut sections, &mut decisions)?;
+                    emit_rule_match(
+                        rule,
+                        service,
+                        day,
+                        candidate,
+                        &self.pack.resources,
+                        &mut sections,
+                        &mut decisions,
+                    )?;
                 }
             }
         }
@@ -272,10 +281,12 @@ fn emit_rule_match(
     service: &ServiceDefinition,
     day: &LiturgicalDay,
     candidate: Option<&ObservanceDefinition>,
+    resources: &BTreeMap<String, Sourced<LiturgicalResourceDefinition>>,
     sections: &mut [PlanSection],
     decisions: &mut Vec<Decision>,
 ) -> Result<(), EngineError> {
     let decision_id = format!("decision-{:04}", decisions.len() + 1);
+    let mut resource_authorities = Vec::new();
     for emission in &rule.emit {
         let section_index = service
             .sections
@@ -304,25 +315,31 @@ fn emit_rule_match(
             )?;
         }
 
-        let material =
-            resolve_material(&emission.material, day, candidate).map_err(|variable| {
-                EngineError::UnknownVariable {
-                    rule: rule.id.clone(),
-                    variable,
-                }
-            })?;
-        sections[section_index].items.push(PlanItem {
-            slot: emission.slot.clone(),
-            count: emission.count,
-            material,
-            decision: decision_id.clone(),
-        });
+        let materials = resolve_emission_materials(
+            rule,
+            emission,
+            service,
+            slot.cardinality,
+            day,
+            candidate,
+            resources,
+            &mut resource_authorities,
+        )?;
+        for material in materials {
+            sections[section_index].items.push(PlanItem {
+                slot: emission.slot.clone(),
+                count: emission.count,
+                material,
+                decision: decision_id.clone(),
+            });
+        }
     }
     let mut seen_authorities = BTreeSet::new();
     let authority = rule
         .authority
         .iter()
         .chain(candidate.into_iter().flat_map(|value| &value.authority))
+        .chain(resource_authorities.iter())
         .filter(|value| seen_authorities.insert(value.as_str()))
         .cloned()
         .collect();
@@ -333,6 +350,96 @@ fn emit_rule_match(
         observance: candidate.map(|observance| observance.id.clone()),
     });
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_emission_materials(
+    rule: &RuleDefinition,
+    emission: &EmissionDefinition,
+    service: &ServiceDefinition,
+    slot_cardinality: SlotCardinality,
+    day: &LiturgicalDay,
+    candidate: Option<&ObservanceDefinition>,
+    resources: &BTreeMap<String, Sourced<LiturgicalResourceDefinition>>,
+    resource_authorities: &mut Vec<String>,
+) -> Result<Vec<BTreeMap<String, Value>>, EngineError> {
+    if let Some(material) = &emission.material {
+        return resolve_material(material, day, candidate)
+            .map(|material| vec![material])
+            .map_err(|variable| EngineError::UnknownVariable {
+                rule: rule.id.clone(),
+                variable,
+            });
+    }
+    let appointment =
+        emission
+            .appointment
+            .as_ref()
+            .ok_or_else(|| EngineError::InvalidPackReference {
+                rule: rule.id.clone(),
+                reference: "emission has neither material nor appointment".to_owned(),
+            })?;
+    let observance = candidate.ok_or_else(|| EngineError::MissingAppointment {
+        observance: "<none>".to_owned(),
+        service: service.id.clone(),
+        role: appointment.clone(),
+    })?;
+    let resource_ids = observance
+        .appointments
+        .get(&service.id)
+        .and_then(|appointments| appointments.get(appointment))
+        .ok_or_else(|| EngineError::MissingAppointment {
+            observance: observance.id.clone(),
+            service: service.id.clone(),
+            role: appointment.clone(),
+        })?;
+    if slot_cardinality != SlotCardinality::Many && resource_ids.as_slice().len() != 1 {
+        return Err(EngineError::AppointmentCardinality {
+            observance: observance.id.clone(),
+            service: service.id.clone(),
+            role: appointment.clone(),
+            count: resource_ids.as_slice().len(),
+        });
+    }
+    resource_ids
+        .as_slice()
+        .iter()
+        .map(|resource_id| {
+            let resource =
+                resources
+                    .get(resource_id)
+                    .ok_or_else(|| EngineError::InvalidPackReference {
+                        rule: rule.id.clone(),
+                        reference: format!("liturgical resource '{resource_id}'"),
+                    })?;
+            resource_authorities.extend(resource.value.authority.iter().cloned());
+            Ok(resource_material(&resource.value, observance))
+        })
+        .collect()
+}
+
+fn resource_material(
+    resource: &LiturgicalResourceDefinition,
+    observance: &ObservanceDefinition,
+) -> BTreeMap<String, Value> {
+    let mut material = resource.properties.clone();
+    material.insert("source".to_owned(), Value::String("resource".to_owned()));
+    material.insert("resource".to_owned(), Value::String(resource.id.clone()));
+    material.insert("title".to_owned(), Value::String(resource.title.clone()));
+    material.insert("kind".to_owned(), Value::String(resource.kind.clone()));
+    material.insert("role".to_owned(), Value::String(resource.role.clone()));
+    material.insert(
+        "reference".to_owned(),
+        Value::String(resource.reference.url.clone()),
+    );
+    if let Some(accessed) = &resource.reference.accessed {
+        material.insert("accessed".to_owned(), Value::String(accessed.clone()));
+    }
+    material.insert(
+        "observance".to_owned(),
+        Value::String(observance.id.clone()),
+    );
+    material
 }
 
 fn check_slot_ambiguity(
@@ -639,6 +746,21 @@ pub enum EngineError {
     UnknownVariable { rule: String, variable: String },
     #[error("rule '{rule}' has invalid validated-pack reference: {reference}")]
     InvalidPackReference { rule: String, reference: String },
+    #[error("observance '{observance}' has no '{role}' appointment for service '{service}'")]
+    MissingAppointment {
+        observance: String,
+        service: String,
+        role: String,
+    },
+    #[error(
+        "observance '{observance}' appoints {count} '{role}' resources to exclusive service '{service}' slot"
+    )]
+    AppointmentCardinality {
+        observance: String,
+        service: String,
+        role: String,
+        count: usize,
+    },
     #[error(
         "conflicting emissions for exclusive slot {section}:{slot} from rules '{first_rule}' and '{second_rule}'"
     )]

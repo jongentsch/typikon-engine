@@ -18,10 +18,11 @@ The detailed normalized milestone covers ordinary Saturday-evening Great
 Vespers, `Lord, I Call`, with its stichera, `Glory`, and `Both now` slots. The
 example GOARCH, OCA, and Antiochian packs also provide whole-service
 proper-bundle baselines for Vespers, Matins, and Divine Liturgy for twelve major
-feasts. Those bundles
-retain official external references rather than copying hymn text or claiming
-that every service-book element has already been normalized. The packs remain
-research fixtures, not usable or complete typika.
+feasts. Each observance appoints typed, evidence-bearing resources to the
+three services, and rules place those appointments into service slots. Those
+resources retain official external references rather than copying hymn text or
+claiming that every service-book element has already been normalized. The packs
+remain research fixtures, not usable or complete typika.
 
 Evidence is categorized as a retrievable `source`, a reusable `scoped_claim`,
 or a date-specific `dated_witness`; authoritative standing versus observed
@@ -101,6 +102,11 @@ boundary intended for non-Rust wrappers. Requests identify
 `typikon.request/v0.1`; results identify `typikon.plan/v0.1` and are validated
 before being returned.
 
+An emitted plan item can be static rule material or a resolved observance
+appointment. Resolved resources are self-describing in the output: resource
+ID, title, kind, role, official reference, observance, and combined authority
+provenance are all retained.
+
 Build and exercise the native ABI from Python with:
 
 ```console
@@ -116,7 +122,9 @@ filesystem nor fetches the network. See [architecture](docs/architecture.md),
 [calendar model](docs/calendar-model.md),
 [interoperability](docs/interoperability.md),
 [schema philosophy](docs/schema-philosophy.md), and
-[fixture evidence](docs/fixture-evidence.md).
+[fixture evidence](docs/fixture-evidence.md). The staged path from the current
+whole-service proper bundles to fully normalized readings and hymnody is in the
+[complete service plan roadmap](docs/complete-service-plan-roadmap.md).
 
 ## License
 

@@ -49,11 +49,13 @@ and Antiochian data remain external runtime inputs.
 5. Use explicitly selected observances, or discover `date.fixed` and
    `date.paschal_offset` observances from the calculated day.
 6. Match structured `when` and `unless` predicates.
-7. Resolve only documented variable references such as `$day.tone`; there is
-   no expression language.
-8. Validate every emitted section and slot against the service definition.
-9. Reject collisions in `optional` and `one` slots as ambiguity.
-10. Return component derivations plus combined scoped-claim and dated-witness
+7. Resolve a rule's static material, or use its appointment role to select the
+   matching service resource from the bound observance.
+8. Expand each appointed resource into self-describing plan material while
+   preserving its official reference and authority records.
+9. Validate every emitted section and slot against the service definition.
+10. Reject collisions in `optional` and `one` slots as ambiguity.
+11. Return component derivations plus combined rule, observance, and resource
    provenance. A
    scoped claim links back to the source records from which it was derived.
 
@@ -71,7 +73,11 @@ individually schema-valid plans keyed by service ID; it introduces no second
 plan contract.
 
 An observance predicate in `when` binds the matching observance for material
-variables. An observance predicate in `unless` checks the whole selected
+variables and appointment lookup. An appointment emission names a semantic
+role, such as `complete-propers`; the observance maps that role to one or more
+resource IDs under the current service. The loader checks every service,
+resource, role, and authority reference before evaluation. An observance
+predicate in `unless` checks the whole selected
 liturgical context, so the presence of another observance can exclude a rule.
 
 The fixed calendar, Paschalion, and tone cycle are independent pack settings.

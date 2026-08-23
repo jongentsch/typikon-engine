@@ -77,6 +77,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                 "definitions": {
                     "services": pack.services.len(),
                     "observances": pack.observances.len(),
+                    "resources": pack.resources.len(),
                     "rules": pack.rules.len(),
                     "authorities": pack.authorities.len()
                 }
