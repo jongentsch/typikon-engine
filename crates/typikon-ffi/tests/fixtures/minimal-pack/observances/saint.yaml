@@ -1,4 +1,4 @@
-schema: typikon.observance/v0.1
+schema: typikon.observance/v0.2
 id: test-saint
 name: Test saint
 date:

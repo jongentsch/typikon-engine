@@ -187,7 +187,13 @@ fn assert_major_feast_services(pack_name: &str, bundle_prefix: &str) {
     }
 }
 
-fn assert_date_compiles_feast(pack_name: &str, date: &str, feast_id: &str, vespers_date: &str) {
+fn assert_date_compiles_feast(
+    pack_name: &str,
+    date: &str,
+    feast_id: &str,
+    vespers_date: &str,
+    selection_derivation: &str,
+) {
     let plans = engine(pack_name).compile_date(date).unwrap();
     assert_eq!(
         plans.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -198,6 +204,10 @@ fn assert_date_compiles_feast(pack_name: &str, date: &str, feast_id: &str, vespe
         assert_eq!(plan.day.liturgical_date, date);
         assert_eq!(plan.observances.len(), 1);
         assert_eq!(plan.observances[0].id, feast_id);
+        assert_eq!(
+            plan.observances[0].selection_derivation.as_deref(),
+            Some(selection_derivation)
+        );
     }
     assert_eq!(plans["vespers"].request.civil_date, vespers_date);
     assert_eq!(plans["matins"].request.civil_date, date);
@@ -308,14 +318,26 @@ fn antiochian_major_feasts_compile_all_three_service_bundles() {
 #[test]
 fn pack_and_civil_date_return_the_fixed_feast_service_cycle_without_a_feast_parameter() {
     for pack_name in ["typikon-goarch", "typikon-oca", "typikon-antiochian"] {
-        assert_date_compiles_feast(pack_name, "2026-12-25", "nativity-christ", "2026-12-24");
+        assert_date_compiles_feast(
+            pack_name,
+            "2026-12-25",
+            "nativity-christ",
+            "2026-12-24",
+            "derivation-0002",
+        );
     }
 }
 
 #[test]
 fn pack_and_civil_date_return_the_movable_feast_service_cycle_without_a_feast_parameter() {
     for pack_name in ["typikon-goarch", "typikon-oca", "typikon-antiochian"] {
-        assert_date_compiles_feast(pack_name, "2026-05-31", "pentecost", "2026-05-30");
+        assert_date_compiles_feast(
+            pack_name,
+            "2026-05-31",
+            "pentecost",
+            "2026-05-30",
+            "derivation-0003",
+        );
     }
 }
 

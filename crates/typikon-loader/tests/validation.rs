@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use typikon_loader::{LoaderError, MemoryResource, load_pack};
+use serde_json::json;
+use typikon_loader::{LoaderError, MemoryResource, SchemaKind, load_pack, validate_value};
 
 #[test]
 fn malformed_yaml_names_its_source() {
@@ -19,6 +20,50 @@ fn unsupported_schema_version_fails_before_deserialization() {
     let error = load_pack(&resource).unwrap_err();
     assert!(matches!(error, LoaderError::Schema { .. }));
     assert!(error.to_string().contains("typikon.pack/v0.1"));
+}
+
+#[test]
+fn observance_date_accepts_a_paschal_offset() {
+    let observance = json!({
+        "schema": "typikon.observance/v0.2",
+        "id": "palm-sunday",
+        "name": "Palm Sunday",
+        "date": { "paschal_offset": -7 },
+        "rank": "major-feast"
+    });
+
+    validate_value(SchemaKind::Observance, "palm-sunday.yaml", &observance).unwrap();
+}
+
+#[test]
+fn observance_date_requires_exactly_one_supported_form() {
+    let invalid_dates = [
+        json!({}),
+        json!({ "fixed": { "month": 12, "day": 25 }, "paschal_offset": 0 }),
+    ];
+
+    for date in invalid_dates {
+        let observance = json!({
+            "schema": "typikon.observance/v0.2",
+            "id": "test",
+            "name": "Test",
+            "date": date,
+            "rank": "test"
+        });
+        let error = validate_value(SchemaKind::Observance, "test.yaml", &observance)
+            .expect_err("ambiguous or empty date should fail");
+        assert!(matches!(error, LoaderError::Schema { .. }));
+    }
+
+    let missing_date = json!({
+        "schema": "typikon.observance/v0.2",
+        "id": "test",
+        "name": "Test",
+        "rank": "test"
+    });
+    let error = validate_value(SchemaKind::Observance, "test.yaml", &missing_date)
+        .expect_err("every observance should have a date");
+    assert!(matches!(error, LoaderError::Schema { .. }));
 }
 
 #[test]
@@ -60,7 +105,7 @@ sections:
         ),
         (
             "observances/feasts/major/nativity-christ.yaml".to_owned(),
-            br"schema: typikon.observance/v0.1
+            br"schema: typikon.observance/v0.2
 id: nativity-christ
 name: Nativity of Christ
 date:

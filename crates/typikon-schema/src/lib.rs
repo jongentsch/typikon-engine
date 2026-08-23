@@ -7,7 +7,7 @@ use serde_json::Value;
 
 pub const PACK_SCHEMA: &str = "typikon.pack/v0.1";
 pub const SERVICE_SCHEMA: &str = "typikon.service/v0.1";
-pub const OBSERVANCE_SCHEMA: &str = "typikon.observance/v0.1";
+pub const OBSERVANCE_SCHEMA: &str = "typikon.observance/v0.2";
 pub const RULE_SCHEMA: &str = "typikon.rule/v0.1";
 pub const AUTHORITY_SCHEMA: &str = "typikon.authority/v0.1";
 pub const FFI_RESPONSE_SCHEMA: &str = "typikon.ffi-response/v0.1";
@@ -115,8 +115,7 @@ pub struct ObservanceDefinition {
     pub schema: String,
     pub id: String,
     pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub date: Option<ObservanceDate>,
+    pub date: ObservanceDate,
     pub rank: String,
     #[serde(default)]
     pub authority: Vec<String>,
@@ -125,9 +124,10 @@ pub struct ObservanceDefinition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct ObservanceDate {
-    pub fixed: FixedDate,
+#[serde(untagged)]
+pub enum ObservanceDate {
+    Fixed { fixed: FixedDate },
+    PaschalOffset { paschal_offset: i32 },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

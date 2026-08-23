@@ -46,8 +46,8 @@ and Antiochian data remain external runtime inputs.
 3. Calculate Orthodox Pascha, the Paschal-cycle phase, and the pack-mapped
    Octoechos tone when that ordinary cycle is active.
 4. Compute the liturgical weekday.
-5. Use explicitly selected observances, or discover fixed-date and
-   `pascha_offset_days` observances from the calculated day.
+5. Use explicitly selected observances, or discover `date.fixed` and
+   `date.paschal_offset` observances from the calculated day.
 6. Match structured `when` and `unless` predicates.
 7. Resolve only documented variable references such as `$day.tone`; there is
    no expression language.

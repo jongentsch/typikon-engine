@@ -33,9 +33,9 @@ The `observance.properties` object is an escape hatch for evidence-led pack
 experimentation. A property should graduate into a first-class concept only
 after multiple real fixtures establish shared semantics.
 
-`pascha_offset_days` is the first shared engine-interpreted property. An
-integer value selects an otherwise undated observance when the target
-liturgical date is that many days from calculated Orthodox Pascha: Palm Sunday
-is `-7`, Ascension is `39`, and Pentecost is `49`. This preserves the current
-schema while the three-pack conformance matrix establishes whether the concept
-deserves a future typed date form.
+The three-pack major-feast conformance matrix established Paschal offsets as a
+shared concept, so `typikon.observance/v0.2` makes every observance date an
+explicit choice between `date.fixed` and `date.paschal_offset`. The latter is
+an integer count of elapsed days from calculated Orthodox Pascha: Palm Sunday
+is `-7`, Ascension is `39`, and Pentecost is `49`. Selection behavior no longer
+depends on an engine-interpreted property.

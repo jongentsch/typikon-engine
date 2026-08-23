@@ -7,8 +7,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use thiserror::Error;
 use typikon_schema::{
-    AuthorityCategory, AuthorityDefinition, ObservanceDefinition, PackDefinition, RuleDefinition,
-    ServiceDefinition,
+    AuthorityCategory, AuthorityDefinition, ObservanceDate, ObservanceDefinition, PackDefinition,
+    RuleDefinition, ServiceDefinition,
 };
 
 const PACK_JSON_SCHEMA: &str = include_str!("../../../schemas/pack.schema.json");
@@ -551,18 +551,18 @@ fn validate_observance_dates(pack: &LoadedPack) -> Result<(), LoaderError> {
                 });
             }
         }
-        if let Some(date) = &sourced.value.date {
-            let max_day = match date.fixed.month {
+        if let ObservanceDate::Fixed { fixed } = &sourced.value.date {
+            let max_day = match fixed.month {
                 2 => 29,
                 4 | 6 | 9 | 11 => 30,
                 _ => 31,
             };
-            if date.fixed.day > max_day {
+            if fixed.day > max_day {
                 return Err(LoaderError::InvalidFixedDate {
                     path: sourced.source.clone(),
                     id: sourced.value.id.clone(),
-                    month: date.fixed.month,
-                    day: date.fixed.day,
+                    month: fixed.month,
+                    day: fixed.day,
                 });
             }
         }

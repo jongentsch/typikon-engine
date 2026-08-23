@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use typikon_core::{Engine, EngineError, InteropError};
 use typikon_loader::{MemoryResource, SchemaKind, Sourced, load_pack, validate_value};
 use typikon_schema::{
-    CompileServiceRequest, FixedCalendar, ObservancePredicate, OneOrMany, REQUEST_SCHEMA,
-    RulePredicate,
+    CompileServiceRequest, FixedCalendar, ObservanceDate, ObservancePredicate, OneOrMany,
+    REQUEST_SCHEMA, RulePredicate,
 };
 
 // Complete inline YAML documents keep the self-contained fixture reviewable.
@@ -61,7 +61,7 @@ sections:
         ),
         (
             "observances/primary.yaml".to_owned(),
-            r"schema: typikon.observance/v0.1
+            r"schema: typikon.observance/v0.2
 id: primary-context
 name: Primary context
 date:
@@ -80,9 +80,13 @@ properties:
         ),
         (
             "observances/blocking.yaml".to_owned(),
-            r"schema: typikon.observance/v0.1
+            r"schema: typikon.observance/v0.2
 id: blocking-context
 name: Blocking context
+date:
+  fixed:
+    month: 1
+    day: 1
 rank: blocking
 "
             .as_bytes()
@@ -345,15 +349,15 @@ fn old_calendar_projection_selects_the_fixed_observance() {
         .as_mut()
         .unwrap()
         .phase = Some(OneOrMany::One("triodion".to_owned()));
-    let fixed = &mut pack
+    let date = &mut pack
         .observances
         .get_mut("primary-context")
         .unwrap()
         .value
-        .date
-        .as_mut()
-        .unwrap()
-        .fixed;
+        .date;
+    let ObservanceDate::Fixed { fixed } = date else {
+        panic!("synthetic primary observance should have a fixed date");
+    };
     fixed.month = 2;
     fixed.day = 29;
 

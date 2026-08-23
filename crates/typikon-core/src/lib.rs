@@ -14,13 +14,12 @@ use thiserror::Error;
 use typikon_loader::{LoadedPack, SchemaKind, validate_value};
 use typikon_schema::{
     CalendarDefinition, CompileServiceRequest, DayPredicate, Decision, LiturgicalDay,
-    ObservanceDefinition, ObservancePredicate, PLAN_SCHEMA, Plan, PlanDerivation, PlanItem,
-    PlanObservance, PlanPack, PlanSection, PlanStatus, REQUEST_SCHEMA, RuleDefinition,
+    ObservanceDate, ObservanceDefinition, ObservancePredicate, PLAN_SCHEMA, Plan, PlanDerivation,
+    PlanItem, PlanObservance, PlanPack, PlanSection, PlanStatus, REQUEST_SCHEMA, RuleDefinition,
     RulePredicate, ServiceDefinition, SlotCardinality,
 };
 
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
-const PASCHA_OFFSET_PROPERTY: &str = "pascha_offset_days";
 
 #[derive(Debug, Clone)]
 pub struct Engine {
@@ -105,8 +104,13 @@ impl Engine {
                     id: observance.id.clone(),
                     name: observance.name.clone(),
                     rank: observance.rank.clone(),
-                    selection_derivation: automatic_observances
-                        .then(|| "derivation-0002".to_owned()),
+                    selection_derivation: automatic_observances.then(|| {
+                        match &observance.date {
+                            ObservanceDate::Fixed { .. } => "derivation-0002",
+                            ObservanceDate::PaschalOffset { .. } => "derivation-0003",
+                        }
+                        .to_owned()
+                    }),
                 })
                 .collect(),
             sections,
@@ -234,24 +238,16 @@ impl Engine {
             let mut selected = Vec::new();
             for (id, sourced) in &self.pack.observances {
                 let observance = &sourced.value;
-                let fixed_match = observance.date.as_ref().is_some_and(|date| {
-                    u32::from(date.fixed.month) == fixed_date.month
-                        && u32::from(date.fixed.day) == fixed_date.day
-                });
-                let pascha_match = match observance.properties.get(PASCHA_OFFSET_PROPERTY) {
-                    Some(value) => {
-                        let offset = value.as_i64().ok_or_else(|| {
-                            EngineError::InvalidObservanceProperty {
-                                observance: id.clone(),
-                                property: PASCHA_OFFSET_PROPERTY,
-                                message: "must be an integer number of days".to_owned(),
-                            }
-                        })?;
-                        offset == pascha_offset
+                let date_match = match &observance.date {
+                    ObservanceDate::Fixed { fixed } => {
+                        u32::from(fixed.month) == fixed_date.month
+                            && u32::from(fixed.day) == fixed_date.day
                     }
-                    None => false,
+                    ObservanceDate::PaschalOffset { paschal_offset } => {
+                        i64::from(*paschal_offset) == pascha_offset
+                    }
                 };
-                if fixed_match || pascha_match {
+                if date_match {
                     selected.push(id.clone());
                 }
             }
@@ -619,12 +615,6 @@ pub enum EngineError {
     UnknownObservance(String),
     #[error("observance '{0}' was selected more than once")]
     DuplicateObservance(String),
-    #[error("observance '{observance}' property '{property}' is invalid: {message}")]
-    InvalidObservanceProperty {
-        observance: String,
-        property: &'static str,
-        message: String,
-    },
     #[error("invalid civil date '{value}': {message}")]
     InvalidCivilDate { value: String, message: String },
     #[error("invalid {field} context value '{value}'")]
