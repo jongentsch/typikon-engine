@@ -43,6 +43,13 @@ enum Command {
         #[arg(long = "observance")]
         observances: Vec<String>,
     },
+    /// Compile every matching service for one target calendar date.
+    CompileDate {
+        #[arg(long)]
+        pack: PathBuf,
+        #[arg(long)]
+        date: String,
+    },
     /// Print one validated rule and its referenced authority records.
     InspectRule {
         #[arg(long)]
@@ -97,6 +104,16 @@ fn run() -> Result<(), Box<dyn Error>> {
             let value = serde_json::to_value(&plan)?;
             validate_value(SchemaKind::Plan, "compiled plan", &value)?;
             println!("{}", serde_json::to_string_pretty(&value)?);
+        }
+        Command::CompileDate { pack, date } => {
+            let resource = DirectoryResource::new(pack)?;
+            let engine = Engine::new(load_pack(&resource)?);
+            let plans = engine.compile_date(&date)?;
+            for (service, plan) in &plans {
+                let value = serde_json::to_value(plan)?;
+                validate_value(SchemaKind::Plan, format!("compiled {service} plan"), &value)?;
+            }
+            println!("{}", serde_json::to_string_pretty(&plans)?);
         }
         Command::InspectRule { pack, rule } => {
             let resource = DirectoryResource::new(pack)?;

@@ -56,10 +56,16 @@ jobs:
         with:
           repository: jongentsch/typikon-oca
           path: typikon-oca
+      - name: Check out Antiochian pack
+        uses: actions/checkout@v6
+        with:
+          repository: jongentsch/typikon-antiochian
+          path: typikon-antiochian
       - uses: dtolnay/rust-toolchain@stable
       - name: Run golden conformance cases
         working-directory: typikon-engine
         env:
           TYPIKON_GOARCH_PACK: ${{ github.workspace }}/typikon-goarch
           TYPIKON_OCA_PACK: ${{ github.workspace }}/typikon-oca
+          TYPIKON_ANTIOCHIAN_PACK: ${{ github.workspace }}/typikon-antiochian
         run: cargo test -p typikon-core --features conformance --test external_packs --locked

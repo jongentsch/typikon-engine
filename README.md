@@ -2,20 +2,25 @@
 
 [![CI](https://github.com/jongentsch/typikon-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/jongentsch/typikon-engine/actions/workflows/ci.yml)
 
-`typikon-engine` is the Rust-engine repository in a three-repository project:
+`typikon-engine` is the Rust-engine repository in a four-repository project:
 
 - `typikon-engine/` (this directory): generic loader, evaluator, CLI, and schemas;
 - `typikon-goarch/`: external experimental GOARCH runtime resource pack;
-- `typikon-oca/`: external experimental OCA runtime resource pack.
+- `typikon-oca/`: external experimental OCA runtime resource pack;
+- `typikon-antiochian/`: external experimental Antiochian runtime resource pack.
 
 It is a schema-first Rust spike for a reusable Orthodox Typikon
 Engine / liturgical compiler. It loads versioned, human-maintained tradition
 definitions at runtime and produces deterministic semantic plans. It does not
 ship liturgical texts or encode a jurisdiction's rules in Rust.
 
-The present milestone deliberately covers only one service fragment:
-ordinary Saturday-evening Great Vespers, `Lord, I Call`, with its stichera,
-`Glory`, and `Both now` slots. The example GOARCH and OCA packs are small
+The detailed normalized milestone covers ordinary Saturday-evening Great
+Vespers, `Lord, I Call`, with its stichera, `Glory`, and `Both now` slots. The
+example GOARCH, OCA, and Antiochian packs also provide whole-service
+proper-bundle baselines for Vespers, Matins, and Divine Liturgy for twelve major
+feasts. Those bundles
+retain official external references rather than copying hymn text or claiming
+that every service-book element has already been normalized. The packs remain
 research fixtures, not usable or complete typika.
 
 Evidence is categorized as a retrievable `source`, a reusable `scoped_claim`,
@@ -43,6 +48,17 @@ cargo run -p typikon-cli -- compile-service \
   --service great_vespers
 ```
 
+The major-feast conformance matrix compiles twelve feasts through three
+services in each pack. Fixed feasts and the three Paschal-offset feasts are
+automatically discovered. The date-level facade adjusts the preceding civil
+evening for Vespers and returns a deterministic service-keyed map:
+
+```console
+cargo run -p typikon-cli -- compile-date \
+  --pack ../typikon-oca \
+  --date 2026-12-25
+```
+
 The engine calculates Orthodox Pascha, the Triodion/Pentecostarion/ordinary
 phase, and the ordinary Octoechos tone from the date. `--tone` and `--phase`
 are optional assertions against those results. Pascha through Bright Saturday
@@ -56,8 +72,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 These default tests are self-contained and pass in a standalone engine clone.
-Cross-repository conformance tests are deliberately explicit. With the GOARCH
-and OCA repositories checked out beside this repository, run:
+Cross-repository conformance tests are deliberately explicit. With the GOARCH,
+OCA, and Antiochian repositories checked out beside this repository, run:
 
 ```console
 cargo test -p typikon-core \
@@ -65,9 +81,9 @@ cargo test -p typikon-core \
   --test external_packs
 ```
 
-`TYPIKON_GOARCH_PACK` and `TYPIKON_OCA_PACK` may be set to alternate pack
-directories. CI checks out all three repositories side by side and runs this
-target separately from the standalone suite.
+`TYPIKON_GOARCH_PACK`, `TYPIKON_OCA_PACK`, and `TYPIKON_ANTIOCHIAN_PACK` may
+be set to alternate pack directories. CI checks out all four repositories side
+by side and runs this target separately from the standalone suite.
 
 ## Workspace boundary
 
@@ -78,8 +94,10 @@ target separately from the standalone suite.
 - `typikon-cli`: filesystem-backed development harness.
 - `typikon-ffi`: minimal `cdylib`/`staticlib` C ABI over UTF-8 JSON.
 
-`typikon-core::Engine::compile_service_json` is the versioned, deterministic
-UTF-8 JSON boundary intended for non-Rust wrappers. Requests identify
+`typikon-core::Engine::compile_date` is the pack-plus-date facade for callers
+that want every matching service without naming a feast. The lower-level
+`compile_service_json` method remains the versioned, deterministic UTF-8 JSON
+boundary intended for non-Rust wrappers. Requests identify
 `typikon.request/v0.1`; results identify `typikon.plan/v0.1` and are validated
 before being returned.
 

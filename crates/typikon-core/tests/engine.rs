@@ -273,6 +273,20 @@ fn compilation_is_byte_for_byte_deterministic() {
 }
 
 #[test]
+fn date_level_compilation_derives_service_start_dates_without_caller_context() {
+    let plans = engine().compile_date("2026-07-26").unwrap();
+    assert_eq!(
+        plans.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["great_vespers"]
+    );
+    let plan = &plans["great_vespers"];
+    assert_eq!(plan.request.civil_date, "2026-07-25");
+    assert!(plan.request.observances.is_empty());
+    assert_eq!(plan.day.liturgical_date, "2026-07-26");
+    assert_eq!(plan.observances[0].id, "primary-context");
+}
+
+#[test]
 fn conflicting_exclusive_emissions_report_ambiguity() {
     let mut pack = synthetic_pack();
     let mut duplicate = pack.rules["ordinary-rule"].clone();

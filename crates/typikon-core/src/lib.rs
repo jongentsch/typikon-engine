@@ -20,6 +20,7 @@ use typikon_schema::{
 };
 
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
+const PASCHA_OFFSET_PROPERTY: &str = "pascha_offset_days";
 
 #[derive(Debug, Clone)]
 pub struct Engine {
@@ -65,7 +66,7 @@ impl Engine {
         )?;
 
         let automatic_observances = request.observances.is_empty();
-        let observance_ids = self.select_observances(&request, &fixed_date)?;
+        let observance_ids = self.select_observances(&request, &fixed_date, &day)?;
         let observances = observance_ids
             .iter()
             .map(|id| {
@@ -111,6 +112,50 @@ impl Engine {
             sections,
             decisions,
         })
+    }
+
+    /// Compiles every matching service in the pack for one target calendar date.
+    ///
+    /// Evening services are compiled from the preceding civil date when their
+    /// service definition advances the liturgical day. Every returned plan
+    /// therefore shares `target_date` as its liturgical date. Services with no
+    /// matching rule are omitted from the deterministic service-keyed map.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid date or any matching service that cannot
+    /// be compiled into a complete plan.
+    pub fn compile_date(&self, target_date: &str) -> Result<BTreeMap<String, Plan>, EngineError> {
+        let target = NaiveDate::parse_from_str(target_date, "%Y-%m-%d").map_err(|error| {
+            EngineError::InvalidCivilDate {
+                value: target_date.to_owned(),
+                message: error.to_string(),
+            }
+        })?;
+        let mut plans = BTreeMap::new();
+        for (service_id, service) in &self.pack.services {
+            let civil_date = target
+                .checked_sub_signed(Duration::days(i64::from(
+                    service.value.liturgical_day_offset,
+                )))
+                .ok_or(EngineError::DateOverflow)?;
+            let request = CompileServiceRequest {
+                schema: REQUEST_SCHEMA.to_owned(),
+                civil_date: civil_date.to_string(),
+                service: service_id.clone(),
+                tone: None,
+                phase: None,
+                observances: Vec::new(),
+            };
+            match self.compile_service(request) {
+                Ok(plan) => {
+                    plans.insert(service_id.clone(), plan);
+                }
+                Err(EngineError::NoMatchingRules { .. }) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(plans)
     }
 
     /// Validates and compiles a versioned UTF-8 JSON request into deterministic
@@ -178,20 +223,39 @@ impl Engine {
         &self,
         request: &CompileServiceRequest,
         fixed_date: &CalendarDate,
+        day: &LiturgicalDay,
     ) -> Result<Vec<String>, EngineError> {
         if request.observances.is_empty() {
-            return Ok(self
-                .pack
-                .observances
-                .iter()
-                .filter(|(_, sourced)| {
-                    sourced.value.date.as_ref().is_some_and(|date| {
-                        u32::from(date.fixed.month) == fixed_date.month
-                            && u32::from(date.fixed.day) == fixed_date.day
-                    })
-                })
-                .map(|(id, _)| id.clone())
-                .collect());
+            let liturgical_date = NaiveDate::parse_from_str(&day.liturgical_date, "%Y-%m-%d")
+                .expect("calculated liturgical date is valid");
+            let pascha = NaiveDate::parse_from_str(&day.pascha, "%Y-%m-%d")
+                .expect("calculated Pascha is valid");
+            let pascha_offset = (liturgical_date - pascha).num_days();
+            let mut selected = Vec::new();
+            for (id, sourced) in &self.pack.observances {
+                let observance = &sourced.value;
+                let fixed_match = observance.date.as_ref().is_some_and(|date| {
+                    u32::from(date.fixed.month) == fixed_date.month
+                        && u32::from(date.fixed.day) == fixed_date.day
+                });
+                let pascha_match = match observance.properties.get(PASCHA_OFFSET_PROPERTY) {
+                    Some(value) => {
+                        let offset = value.as_i64().ok_or_else(|| {
+                            EngineError::InvalidObservanceProperty {
+                                observance: id.clone(),
+                                property: PASCHA_OFFSET_PROPERTY,
+                                message: "must be an integer number of days".to_owned(),
+                            }
+                        })?;
+                        offset == pascha_offset
+                    }
+                    None => false,
+                };
+                if fixed_match || pascha_match {
+                    selected.push(id.clone());
+                }
+            }
+            return Ok(selected);
         }
 
         let mut selected = BTreeSet::new();
@@ -555,6 +619,12 @@ pub enum EngineError {
     UnknownObservance(String),
     #[error("observance '{0}' was selected more than once")]
     DuplicateObservance(String),
+    #[error("observance '{observance}' property '{property}' is invalid: {message}")]
+    InvalidObservanceProperty {
+        observance: String,
+        property: &'static str,
+        message: String,
+    },
     #[error("invalid civil date '{value}': {message}")]
     InvalidCivilDate { value: String, message: String },
     #[error("invalid {field} context value '{value}'")]
