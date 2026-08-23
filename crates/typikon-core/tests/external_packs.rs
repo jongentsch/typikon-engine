@@ -146,7 +146,7 @@ fn assert_major_feast_services(pack_name: &str, bundle_prefix: &str) {
             ("divine_liturgy", feast.liturgical_date, "divine-liturgy"),
         ] {
             let plan = &plans[service];
-            let value = serde_json::to_value(&plan).unwrap();
+            let value = serde_json::to_value(plan).unwrap();
             validate_value(SchemaKind::Plan, "major-feast plan", &value).unwrap();
             assert_eq!(plan.request.civil_date, date);
             assert!(plan.request.observances.is_empty());

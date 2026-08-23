@@ -24,6 +24,12 @@ directory implementation. Directory paths are confined to the supplied pack
 root. Other providers (archive, browser fetch result, database, embedded bytes)
 can implement the same interface without changing evaluation.
 
+Definition directories are scanned recursively. Packs can therefore keep
+observances in a human-scale taxonomy such as `observances/feasts/major/`,
+`observances/feasts/minor/`, and `observances/saints/<type>/`. An observance's
+stable `id`, rather than its file path, remains the reference key, so moving a
+definition between taxonomy directories does not change compilation behavior.
+
 Tradition resources are never compiled into `typikon-core`. In this project,
 `typikon-engine`, `typikon-goarch`, `typikon-oca`, and `typikon-antiochian` are
 peer directories so that repository ownership is also visible in the
