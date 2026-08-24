@@ -54,7 +54,7 @@ def main() -> None:
     if not response.get("ok"):
         raise RuntimeError(response.get("error", response))
     plan = response["plan"]
-    assert plan["schema"] == "typikon.plan/v0.1"
+    assert plan["schema"] == "typikon.plan/v0.2"
     assert plan["pack"]["id"] == "ffi-test"
     assert plan["day"]["tone"] == "tone_7"
     print(json.dumps({"status": "ok", "pack": plan["pack"], "day": plan["day"]}))

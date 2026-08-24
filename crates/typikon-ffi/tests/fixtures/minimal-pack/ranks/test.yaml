@@ -1,0 +1,8 @@
+schema: typikon.rank/v0.1
+id: test-rank
+name: Test rank
+authority: [test-source]
+services:
+  great_vespers:
+    required:
+      - { section: lord_i_call, component: stichera }

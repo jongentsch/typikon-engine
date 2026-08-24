@@ -5,8 +5,11 @@ use typikon_loader::{LoaderError, MemoryResource, SchemaKind, load_pack, validat
 
 #[test]
 fn malformed_yaml_names_its_source() {
-    let resource = MemoryResource::from_text([("pack.yaml".to_owned(), "[".to_owned())]);
-    let error = load_pack(&resource).unwrap_err();
+    let error = load_pack(&MemoryResource::from_text([(
+        "pack.yaml".to_owned(),
+        "[".to_owned(),
+    )]))
+    .unwrap_err();
     assert!(matches!(error, LoaderError::MalformedYaml { .. }));
     assert!(error.to_string().contains("pack.yaml"));
 }
@@ -19,105 +22,55 @@ fn unsupported_schema_version_fails_before_deserialization() {
     )]);
     let error = load_pack(&resource).unwrap_err();
     assert!(matches!(error, LoaderError::Schema { .. }));
-    assert!(error.to_string().contains("typikon.pack/v0.2"));
+    assert!(error.to_string().contains("typikon.pack/v0.3"));
 }
 
 #[test]
-fn observance_date_accepts_a_paschal_offset() {
-    let observance = json!({
-        "schema": "typikon.observance/v0.3",
-        "id": "palm-sunday",
-        "name": "Palm Sunday",
-        "date": { "paschal_offset": -7 },
+fn observance_dates_share_one_uniform_date_location() {
+    for date in [
+        json!({ "fixed": { "month": 12, "day": 25 } }),
+        json!({ "paschal_offset": -7 }),
+    ] {
+        let observance = json!({
+            "schema": "typikon.observance/v0.4", "id": "test", "name": "Test",
+            "date": date, "rank": "major-feast"
+        });
+        validate_value(SchemaKind::Observance, "test.yaml", &observance).unwrap();
+    }
+    let invalid = json!({
+        "schema": "typikon.observance/v0.4", "id": "test", "name": "Test",
+        "date": { "fixed": { "month": 12, "day": 25 }, "paschal_offset": 0 },
         "rank": "major-feast"
     });
-
-    validate_value(SchemaKind::Observance, "palm-sunday.yaml", &observance).unwrap();
-}
-
-#[test]
-fn observance_date_requires_exactly_one_supported_form() {
-    let invalid_dates = [
-        json!({}),
-        json!({ "fixed": { "month": 12, "day": 25 }, "paschal_offset": 0 }),
-    ];
-
-    for date in invalid_dates {
-        let observance = json!({
-            "schema": "typikon.observance/v0.3",
-            "id": "test",
-            "name": "Test",
-            "date": date,
-            "rank": "test"
-        });
-        let error = validate_value(SchemaKind::Observance, "test.yaml", &observance)
-            .expect_err("ambiguous or empty date should fail");
-        assert!(matches!(error, LoaderError::Schema { .. }));
-    }
-
-    let missing_date = json!({
-        "schema": "typikon.observance/v0.3",
-        "id": "test",
-        "name": "Test",
-        "rank": "test"
-    });
-    let error = validate_value(SchemaKind::Observance, "test.yaml", &missing_date)
-        .expect_err("every observance should have a date");
-    assert!(matches!(error, LoaderError::Schema { .. }));
+    assert!(validate_value(SchemaKind::Observance, "test.yaml", &invalid).is_err());
 }
 
 #[test]
 fn rule_emission_requires_exactly_one_material_source() {
-    let base = json!({
-        "schema": "typikon.rule/v0.2",
-        "id": "test",
+    let neither = json!({
+        "schema": "typikon.rule/v0.3", "id": "test",
         "when": { "service": "vespers", "observance": { "rank": "feast" } },
-        "emit": [{ "section": "propers", "slot": "feast" }]
+        "emit": [{ "section": "propers", "component": "hymn" }]
     });
-    assert!(validate_value(SchemaKind::Rule, "test.yaml", &base).is_err());
+    assert!(validate_value(SchemaKind::Rule, "test.yaml", &neither).is_err());
 
-    let mut both = base;
-    both["emit"][0]["material"] = json!({ "source": "test" });
-    both["emit"][0]["appointment"] = json!("complete-propers");
+    let observance = json!({
+        "schema": "typikon.rule/v0.3", "id": "test",
+        "when": { "service": "vespers", "observance": { "rank": "feast" } },
+        "emit": [{ "section": "propers", "component": "hymn", "observance": true }]
+    });
+    validate_value(SchemaKind::Rule, "test.yaml", &observance).unwrap();
+
+    let mut both = observance;
+    both["emit"][0]["material"] = json!({ "kind": "hymn", "title": "Hymn" });
     assert!(validate_value(SchemaKind::Rule, "test.yaml", &both).is_err());
-
-    let appointment = json!({
-        "schema": "typikon.rule/v0.2",
-        "id": "test",
-        "when": { "service": "vespers", "observance": { "rank": "feast" } },
-        "emit": [{
-            "section": "propers",
-            "slot": "feast",
-            "appointment": "complete-propers"
-        }]
-    });
-    validate_value(SchemaKind::Rule, "test.yaml", &appointment).unwrap();
 }
 
-#[test]
-fn liturgical_resource_contract_requires_evidence_and_a_role() {
-    let resource = json!({
-        "schema": "typikon.resource/v0.1",
-        "id": "nativity-vespers",
-        "title": "Nativity Vespers proper bundle",
-        "kind": "service-bundle",
-        "role": "complete-propers",
-        "authority": ["published-order"],
-        "reference": { "url": "https://example.test/nativity-vespers" }
-    });
-    validate_value(SchemaKind::Resource, "resource.yaml", &resource).unwrap();
-
-    let mut missing_authority = resource;
-    missing_authority["authority"] = json!([]);
-    assert!(validate_value(SchemaKind::Resource, "resource.yaml", &missing_authority).is_err());
-}
-
-#[test]
-fn observances_load_recursively_from_taxonomy_directories() {
-    let files = BTreeMap::from([
+fn valid_files() -> BTreeMap<String, Vec<u8>> {
+    [
         (
-            "pack.yaml".to_owned(),
-            br"schema: typikon.pack/v0.2
+            "pack.yaml",
+            r"schema: typikon.pack/v0.3
 id: test
 name: Test
 version: 0.1.0
@@ -130,123 +83,137 @@ calendar:
 definitions:
   services: services/
   observances: observances/
-  resources: resources/
+  ranks: ranks/
   rules: rules/
   authorities: authorities/
-"
-            .to_vec(),
+",
         ),
         (
-            "services/vespers.yaml".to_owned(),
-            br"schema: typikon.service/v0.1
+            "authorities/source.yaml",
+            r"schema: typikon.authority/v0.1
+id: source
+title: Source
+category: source
+kind: authoritative
+reference: { url: https://example.test/source }
+",
+        ),
+        (
+            "services/vespers.yaml",
+            r"schema: typikon.service/v0.2
 id: vespers
 name: Vespers
 liturgical_day_offset: 1
+authority: [source]
 sections:
   - id: psalms
-    slots:
+    name: Psalms
+    components:
+      - id: opening
+        name: Opening
+        kind: fixed
+        material: { kind: fixed_text, title: Opening }
       - id: verses
+        name: Verses
+        kind: changeable
         cardinality: many
-"
-            .to_vec(),
+        accepts: [hymn]
+",
         ),
         (
-            "observances/feasts/major/nativity-christ.yaml".to_owned(),
-            br"schema: typikon.observance/v0.3
+            "ranks/major.yaml",
+            r"schema: typikon.rank/v0.1
+id: major-feast
+name: Major feast
+authority: [source]
+services:
+  vespers:
+    required:
+      - { section: psalms, component: verses }
+",
+        ),
+        (
+            "observances/feasts/major/nativity.yaml",
+            r"schema: typikon.observance/v0.4
 id: nativity-christ
 name: Nativity of Christ
 date:
-  fixed:
-    month: 12
-    day: 25
+  fixed: { month: 12, day: 25 }
 rank: major-feast
-"
-            .to_vec(),
+common:
+  hymn: { kind: sticheron, role: hymn, title: Nativity hymn }
+services:
+  vespers:
+    psalms:
+      verses: { use: common.hymn }
+",
         ),
         (
-            "rules/vespers.yaml".to_owned(),
-            br"schema: typikon.rule/v0.2
+            "rules/vespers.yaml",
+            r"schema: typikon.rule/v0.3
 id: vespers
 when:
   service: vespers
+  observance: { rank: major-feast }
 emit:
-  - section: psalms
-    slot: verses
-    material:
-      source: test
-"
-            .to_vec(),
+  - { section: psalms, component: verses, observance: true }
+",
         ),
-    ]);
-
-    let pack = load_pack(&MemoryResource::new(files)).expect("nested observance should load");
-    let observance = pack
-        .observances
-        .get("nativity-christ")
-        .expect("observance should be indexed by its stable ID");
-
-    assert_eq!(
-        observance.source,
-        "observances/feasts/major/nativity-christ.yaml"
-    );
+    ]
+    .map(|(path, contents)| (path.to_owned(), contents.as_bytes().to_vec()))
+    .into_iter()
+    .collect()
 }
 
 #[test]
-fn an_unknown_emission_slot_names_the_rule_and_slot() {
-    let files = BTreeMap::from([
-        (
-            "pack.yaml".to_owned(),
-            br"schema: typikon.pack/v0.2
-id: test
-name: Test
-version: 0.1.0
-calendar:
-  fixed: revised_julian
-  paschalion: orthodox_julian
-  tone_cycle:
-    system: octoechos
-    tones: [tone_1, tone_2, tone_3, tone_4, tone_5, tone_6, tone_7, tone_8]
-definitions:
-  services: services/
-  observances: observances/
-  resources: resources/
-  rules: rules/
-  authorities: authorities/
-"
-            .to_vec(),
-        ),
-        (
-            "services/vespers.yaml".to_owned(),
-            br"schema: typikon.service/v0.1
-id: vespers
-name: Vespers
-liturgical_day_offset: 1
-sections:
-  - id: psalms
-    slots:
-      - id: verses
-        cardinality: many
-"
-            .to_vec(),
-        ),
-        (
-            "rules/bad.yaml".to_owned(),
-            br"schema: typikon.rule/v0.2
+fn recursive_taxonomy_and_local_material_references_load() {
+    let pack = load_pack(&MemoryResource::new(valid_files())).unwrap();
+    assert_eq!(
+        pack.observances["nativity-christ"].source,
+        "observances/feasts/major/nativity.yaml"
+    );
+    assert!(pack.ranks.contains_key("major-feast"));
+}
+
+#[test]
+fn unknown_component_reference_names_the_rule_and_path() {
+    let mut files = valid_files();
+    files.insert(
+        "rules/vespers.yaml".to_owned(),
+        br"schema: typikon.rule/v0.3
 id: bad-rule
-when:
-  service: vespers
+when: { service: vespers }
 emit:
   - section: psalms
-    slot: missing
-    material:
-      source: test
+    component: missing
+    material: { kind: hymn, title: Hymn }
 "
-            .to_vec(),
-        ),
-    ]);
+        .to_vec(),
+    );
     let error = load_pack(&MemoryResource::new(files)).unwrap_err();
     assert!(matches!(error, LoaderError::UnknownReference { .. }));
-    let message = error.to_string();
-    assert!(message.contains("bad-rule"));
-    assert!(message.contains("psalms:missing"));
+    assert!(error.to_string().contains("bad-rule"));
+    assert!(error.to_string().contains("psalms:missing"));
+}
+
+#[test]
+fn observance_cannot_write_into_a_fixed_component() {
+    let mut files = valid_files();
+    let observance = String::from_utf8(
+        files
+            .remove("observances/feasts/major/nativity.yaml")
+            .unwrap(),
+    )
+    .unwrap()
+    .replace(
+        "verses: { use: common.hymn }",
+        "opening: { use: common.hymn }",
+    );
+    files.insert(
+        "observances/feasts/major/nativity.yaml".to_owned(),
+        observance.into_bytes(),
+    );
+    let error = load_pack(&MemoryResource::new(files)).unwrap_err();
+    assert!(matches!(error, LoaderError::Schema { .. }));
+    assert!(error.to_string().contains("fixed component"));
 }

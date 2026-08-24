@@ -1,0 +1,6 @@
+schema: typikon.authority/v0.1
+id: test-source
+title: Test source
+category: source
+kind: authoritative
+reference: { url: https://example.test/source }

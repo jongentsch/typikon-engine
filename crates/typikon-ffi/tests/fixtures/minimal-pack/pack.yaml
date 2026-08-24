@@ -1,4 +1,4 @@
-schema: typikon.pack/v0.2
+schema: typikon.pack/v0.3
 id: ffi-test
 name: FFI test
 version: 0.1.0
@@ -7,18 +7,10 @@ calendar:
   paschalion: orthodox_julian
   tone_cycle:
     system: octoechos
-    tones:
-      - tone_1
-      - tone_2
-      - tone_3
-      - tone_4
-      - tone_5
-      - tone_6
-      - tone_7
-      - tone_8
+    tones: [tone_1, tone_2, tone_3, tone_4, tone_5, tone_6, tone_7, tone_8]
 definitions:
   services: services/
   observances: observances/
-  resources: resources/
+  ranks: ranks/
   rules: rules/
   authorities: authorities/

@@ -4,7 +4,7 @@ The Rust-native API uses rich types. Foreign-language interfaces stay
 deliberately small and exchange UTF-8 JSON conforming to the request and plan
 contracts. `Engine::compile_service_json` is the implemented shared boundary:
 it validates `typikon.request/v0.1`, compiles through the same typed evaluator,
-validates `typikon.plan/v0.1`, and emits deterministic compact JSON.
+validates `typikon.plan/v0.2`, and emits deterministic compact JSON.
 
 Minimal request:
 

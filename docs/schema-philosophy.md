@@ -1,50 +1,48 @@
 # Schema philosophy
 
-YAML is the authoring form. JSON Schema is the external definition contract,
-and typed Rust structures are the evaluator input. Generic YAML maps are used
-only at the validation boundary and for deliberately open-ended observance
-properties and semantic material attributes.
+The authoring model follows the way a liturgist divides the work.
 
-The vocabulary is intentionally small: pack, service, observance, liturgical
-resource, rule, authority, compile request, and plan. Every serialized input
-and output names its schema version. Rank and tone values remain pack strings
-rather than Rust enums. Material describes what a consumer must supply; it
-contains no prayer or hymn text.
+## Service owns structure
 
-Authority provenance is a small typed graph. A `source` has a retrievable
-reference. A `scoped_claim` contains the reusable assertion and cites one or
-more source authority IDs. A `dated_witness` has a retrievable reference and a
-required liturgical date. Its separate `kind` says whether the record is
-authoritative or merely observed behavior. The loader validates both the
-category-specific shape and claim-to-source references.
+A service definition is the whole ordered service. Components are explicitly
+`fixed` or `changeable`. Fixed components carry their material or citation in
+the service document. Changeable components declare cardinality and the roles
+they accept. Service forms model real variants such as the Divine Liturgies of
+Saint John Chrysostom and Saint Basil, not feast-specific pseudo-services.
 
-Rules contain equality predicates and emissions. An emission contains exactly
-one source: either static `material`, whose values may be literal scalars or
-exact variable references, or an `appointment` role resolved through the bound
-observance and current service. Arbitrary expressions, scripts, callbacks, and
-magic numeric priorities are unsupported.
+## Observance owns propers
 
-Appointments keep ownership at the right layer. A service defines available
-sections and slots. An observance owns its date, rank, and service-specific
-resource appointments. A rule decides which appointment role fills which slot.
-A `typikon.resource/v0.1` document owns the material's stable ID, title, kind,
-role, official external reference, and authority provenance. The loader rejects
-unknown resource IDs and role mismatches before compilation.
+An observance owns:
 
-Calendar configuration uses closed enums for algorithms but keeps the eight
-tone names in pack vocabulary. Compiled plans expose ordered component
-derivations rather than hiding calendar conversion, Pascha, weekday, tone, or
-calculated phase behind a single opaque result. The ordinary tone is nullable
-only for Pascha through Bright Saturday, when the cycle is explicitly
-suspended.
+- its uniform `date` expression;
+- its rank;
+- reusable local material under `common`;
+- its contribution to each service, section, and component;
+- evidence supporting those claims.
 
-The `observance.properties` object is an escape hatch for evidence-led pack
-experimentation. A property should graduate into a first-class concept only
-after multiple real fixtures establish shared semantics.
+Material can be inline or `use: common.<id>`. Separate global documents are
+reserved for genuinely shared books or corpora, not every saint's hymn.
 
-The three-pack major-feast conformance matrix established Paschal offsets as a
-shared concept, so every observance date is an
-explicit choice between `date.fixed` and `date.paschal_offset`. The latter is
-an integer count of elapsed days from calculated Orthodox Pascha: Palm Sunday
-is `-7`, Ascension is `39`, and Pentecost is `49`. Selection behavior no longer
-depends on an engine-interpreted property.
+## Rank owns completeness
+
+A rank profile is a pack-maintained rubric contract. Its service-specific
+requirements tell the compiler—and the editor—what a saint of that rank still
+needs. A new rank is authored once, reviewed against authority, and then reused
+by observances.
+
+## Rules own appointment and combination
+
+Rules decide when cycle material and observance material enter a service
+component. They may also select a service form. They do not contain a duplicate
+copy of an observance's text and do not name dated output bundles.
+
+## Evidence never becomes recurrence by accident
+
+Authority records distinguish retrievable sources, reusable scoped claims, and
+dated witnesses. A dated witness may verify a compiled date; it is not a
+perennial appointment. Plans remain reviewable when authoritative evidence has
+not yet been normalized at component granularity.
+
+`observance.properties` remains a narrow escape hatch for evidence-led
+experiments. A concept graduates into a typed schema field only after real pack
+data establishes stable semantics.

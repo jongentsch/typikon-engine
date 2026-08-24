@@ -5,16 +5,16 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const PACK_SCHEMA: &str = "typikon.pack/v0.2";
-pub const SERVICE_SCHEMA: &str = "typikon.service/v0.1";
-pub const OBSERVANCE_SCHEMA: &str = "typikon.observance/v0.3";
-pub const RULE_SCHEMA: &str = "typikon.rule/v0.2";
+pub const PACK_SCHEMA: &str = "typikon.pack/v0.3";
+pub const SERVICE_SCHEMA: &str = "typikon.service/v0.2";
+pub const OBSERVANCE_SCHEMA: &str = "typikon.observance/v0.4";
+pub const RANK_SCHEMA: &str = "typikon.rank/v0.1";
+pub const RULE_SCHEMA: &str = "typikon.rule/v0.3";
 pub const AUTHORITY_SCHEMA: &str = "typikon.authority/v0.1";
-pub const RESOURCE_SCHEMA: &str = "typikon.resource/v0.1";
 pub const FFI_RESPONSE_SCHEMA: &str = "typikon.ffi-response/v0.1";
 pub const REQUEST_SCHEMA: &str = "typikon.request/v0.1";
 pub const RESOURCE_BUNDLE_SCHEMA: &str = "typikon.resource-bundle/v0.1";
-pub const PLAN_SCHEMA: &str = "typikon.plan/v0.1";
+pub const PLAN_SCHEMA: &str = "typikon.plan/v0.2";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -74,38 +74,68 @@ pub enum ToneCycleSystem {
 pub struct DefinitionDirectories {
     pub services: String,
     pub observances: String,
-    pub resources: String,
+    pub ranks: String,
     pub rules: String,
     pub authorities: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceDefinition {
     pub schema: String,
     pub id: String,
     pub name: String,
     pub liturgical_day_offset: i32,
+    pub authority: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_form: Option<String>,
+    #[serde(default)]
+    pub forms: Vec<ServiceFormDefinition>,
     pub sections: Vec<SectionDefinition>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct SectionDefinition {
+pub struct ServiceFormDefinition {
     pub id: String,
-    pub slots: Vec<SlotDefinition>,
+    pub name: String,
+    pub authority: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct SlotDefinition {
+pub struct SectionDefinition {
     pub id: String,
-    pub cardinality: SlotCardinality,
+    pub name: String,
+    pub components: Vec<ServiceComponentDefinition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ServiceComponentDefinition {
+    pub id: String,
+    pub name: String,
+    pub kind: ComponentKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cardinality: Option<ComponentCardinality>,
+    #[serde(default)]
+    pub accepts: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<Material>,
+    #[serde(default)]
+    pub form_material: BTreeMap<String, Material>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum SlotCardinality {
+pub enum ComponentKind {
+    Fixed,
+    Changeable,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ComponentCardinality {
     Many,
     Optional,
     One,
@@ -122,9 +152,67 @@ pub struct ObservanceDefinition {
     #[serde(default)]
     pub authority: Vec<String>,
     #[serde(default)]
-    pub appointments: BTreeMap<String, BTreeMap<String, OneOrMany>>,
+    pub common: BTreeMap<String, Material>,
+    #[serde(default)]
+    pub services: BTreeMap<String, BTreeMap<String, BTreeMap<String, MaterialSelection>>>,
     #[serde(default)]
     pub properties: BTreeMap<String, Value>,
+}
+
+pub type Material = BTreeMap<String, Value>;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum MaterialSelection {
+    One(MaterialUse),
+    Many(Vec<MaterialUse>),
+}
+
+impl MaterialSelection {
+    #[must_use]
+    pub fn as_slice(&self) -> &[MaterialUse] {
+        match self {
+            Self::One(value) => std::slice::from_ref(value),
+            Self::Many(values) => values,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum MaterialUse {
+    LocalReference(LocalMaterialReference),
+    Inline(Material),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct LocalMaterialReference {
+    #[serde(rename = "use")]
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RankDefinition {
+    pub schema: String,
+    pub id: String,
+    pub name: String,
+    pub authority: Vec<String>,
+    pub services: BTreeMap<String, RankServiceDefinition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RankServiceDefinition {
+    pub required: Vec<RankRequirement>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RankRequirement {
+    pub section: String,
+    pub component: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -149,6 +237,9 @@ pub struct RuleDefinition {
     pub when: RulePredicate,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unless: Option<RulePredicate>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub select_form: Option<String>,
+    #[serde(default)]
     pub emit: Vec<EmissionDefinition>,
     #[serde(default)]
     pub authority: Vec<String>,
@@ -214,27 +305,13 @@ impl OneOrMany {
 #[serde(deny_unknown_fields)]
 pub struct EmissionDefinition {
     pub section: String,
-    pub slot: String,
+    pub component: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub material: Option<BTreeMap<String, Value>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub appointment: Option<String>,
+    pub observance: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct LiturgicalResourceDefinition {
-    pub schema: String,
-    pub id: String,
-    pub title: String,
-    pub kind: String,
-    pub role: String,
-    pub authority: Vec<String>,
-    pub reference: AuthorityReference,
-    #[serde(default)]
-    pub properties: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -300,6 +377,8 @@ pub struct Plan {
     pub schema: String,
     pub engine_version: String,
     pub status: PlanStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub form: Option<String>,
     pub pack: PlanPack,
     pub request: CompileServiceRequest,
     pub day: LiturgicalDay,
@@ -359,17 +438,38 @@ pub struct PlanDerivation {
 #[serde(deny_unknown_fields)]
 pub struct PlanSection {
     pub id: String,
-    pub items: Vec<PlanItem>,
+    pub name: String,
+    pub components: Vec<PlanComponent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct PlanItem {
-    pub slot: String,
+pub struct PlanComponent {
+    pub id: String,
+    pub name: String,
+    pub kind: ComponentKind,
+    pub status: PlanComponentStatus,
+    pub materials: Vec<PlanMaterial>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanComponentStatus {
+    Resolved,
+    Omitted,
+    Unresolved,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PlanMaterial {
+    pub material: Material,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<u32>,
-    pub material: BTreeMap<String, Value>,
-    pub decision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observance: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

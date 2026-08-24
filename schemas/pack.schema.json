@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://typikon.dev/schema/pack/v0.2",
+  "$id": "https://typikon.dev/schema/pack/v0.3",
   "title": "Typikon tradition pack",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "id", "name", "version", "calendar", "definitions"],
   "properties": {
-    "schema": { "const": "typikon.pack/v0.2" },
+    "schema": { "const": "typikon.pack/v0.3" },
     "id": { "$ref": "#/$defs/id" },
     "name": { "type": "string", "minLength": 1 },
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
@@ -37,11 +37,11 @@
     "definitions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["services", "observances", "resources", "rules", "authorities"],
+      "required": ["services", "observances", "ranks", "rules", "authorities"],
       "properties": {
         "services": { "$ref": "#/$defs/path" },
         "observances": { "$ref": "#/$defs/path" },
-        "resources": { "$ref": "#/$defs/path" },
+        "ranks": { "$ref": "#/$defs/path" },
         "rules": { "$ref": "#/$defs/path" },
         "authorities": { "$ref": "#/$defs/path" }
       }

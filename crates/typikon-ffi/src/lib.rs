@@ -168,7 +168,9 @@ mod tests {
                 "pack.yaml": include_str!("../tests/fixtures/minimal-pack/pack.yaml"),
                 "services/vespers.yaml": include_str!("../tests/fixtures/minimal-pack/services/vespers.yaml"),
                 "observances/saint.yaml": include_str!("../tests/fixtures/minimal-pack/observances/saint.yaml"),
-                "rules/ordinary.yaml": include_str!("../tests/fixtures/minimal-pack/rules/ordinary.yaml")
+                "ranks/test.yaml": include_str!("../tests/fixtures/minimal-pack/ranks/test.yaml"),
+                "rules/ordinary.yaml": include_str!("../tests/fixtures/minimal-pack/rules/ordinary.yaml"),
+                "authorities/source.yaml": include_str!("../tests/fixtures/minimal-pack/authorities/source.yaml")
             }
         });
         CString::new(bundle.to_string()).unwrap()

@@ -11,16 +11,17 @@ use calendar::{
 use chrono::{Datelike, Duration, NaiveDate};
 use serde_json::Value;
 use thiserror::Error;
-use typikon_loader::{LoadedPack, SchemaKind, Sourced, validate_value};
+use typikon_loader::{LoadedPack, SchemaKind, validate_value};
 use typikon_schema::{
-    CalendarDefinition, CompileServiceRequest, DayPredicate, Decision, EmissionDefinition,
-    LiturgicalDay, LiturgicalResourceDefinition, ObservanceDate, ObservanceDefinition,
-    ObservancePredicate, PLAN_SCHEMA, Plan, PlanDerivation, PlanItem, PlanObservance, PlanPack,
-    PlanSection, PlanStatus, REQUEST_SCHEMA, RuleDefinition, RulePredicate, ServiceDefinition,
-    SlotCardinality,
+    CalendarDefinition, CompileServiceRequest, ComponentCardinality, ComponentKind, DayPredicate,
+    Decision, EmissionDefinition, LiturgicalDay, MaterialUse, ObservanceDate, ObservanceDefinition,
+    ObservancePredicate, PLAN_SCHEMA, Plan, PlanComponent, PlanComponentStatus, PlanDerivation,
+    PlanMaterial, PlanObservance, PlanPack, PlanSection, PlanStatus, REQUEST_SCHEMA,
+    RuleDefinition, RulePredicate, ServiceDefinition,
 };
 
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
+type Evaluation = (Option<String>, Vec<PlanSection>, Vec<Decision>);
 
 #[derive(Debug, Clone)]
 pub struct Engine {
@@ -77,7 +78,7 @@ impl Engine {
                     .ok_or_else(|| EngineError::UnknownObservance(id.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let (sections, decisions) =
+        let (form, mut sections, decisions) =
             self.evaluate_rules(&request.service, &day, &observances, &service.value)?;
 
         if decisions.is_empty() {
@@ -86,12 +87,14 @@ impl Engine {
                 date: day.liturgical_date.clone(),
             });
         }
-        validate_required_slots(&service.value, &sections)?;
+        let status =
+            mark_required_components(&self.pack, &observances, &request.service, &mut sections);
 
         Ok(Plan {
             schema: PLAN_SCHEMA.to_owned(),
             engine_version: ENGINE_VERSION.to_owned(),
-            status: PlanStatus::Complete,
+            status,
+            form,
             pack: PlanPack {
                 id: self.pack.pack.value.id.clone(),
                 version: self.pack.pack.value.version.clone(),
@@ -192,17 +195,8 @@ impl Engine {
         day: &LiturgicalDay,
         observances: &[&ObservanceDefinition],
         service: &ServiceDefinition,
-    ) -> Result<(Vec<PlanSection>, Vec<Decision>), EngineError> {
-        let mut sections = service
-            .sections
-            .iter()
-            .map(|section| PlanSection {
-                id: section.id.clone(),
-                items: Vec::new(),
-            })
-            .collect::<Vec<_>>();
-        let mut decisions = Vec::new();
-
+    ) -> Result<Evaluation, EngineError> {
+        let mut matched_rules = Vec::new();
         for sourced_rule in self.pack.rules.values() {
             let rule = &sourced_rule.value;
             let candidates = if rule.when.observance.is_some() {
@@ -211,25 +205,37 @@ impl Engine {
                 vec![None]
             };
             for candidate in candidates {
-                let matches =
+                let is_match =
                     predicate_matches(&rule.when, service_id, day, candidate, observances);
                 let excluded = rule.unless.as_ref().is_some_and(|unless| {
                     predicate_matches(unless, service_id, day, None, observances)
                 });
-                if matches && !excluded {
-                    emit_rule_match(
-                        rule,
-                        service,
-                        day,
-                        candidate,
-                        &self.pack.resources,
-                        &mut sections,
-                        &mut decisions,
-                    )?;
+                if is_match && !excluded {
+                    matched_rules.push((rule, candidate));
                 }
             }
         }
-        Ok((sections, decisions))
+        let mut form = service.default_form.clone();
+        for (rule, _) in &matched_rules {
+            if let Some(selected) = &rule.select_form {
+                if form.as_ref().is_some_and(|existing| existing != selected)
+                    && service.default_form.as_ref() != form.as_ref()
+                {
+                    return Err(EngineError::AmbiguousServiceForm {
+                        service: service.id.clone(),
+                        first: form.expect("checked"),
+                        second: selected.clone(),
+                    });
+                }
+                form = Some(selected.clone());
+            }
+        }
+        let mut sections = initialize_sections(service, form.as_deref());
+        let mut decisions = Vec::new();
+        for (rule, candidate) in matched_rules {
+            emit_rule_match(rule, service, day, candidate, &mut sections, &mut decisions)?;
+        }
+        Ok((form, sections, decisions))
     }
 
     fn select_observances(
@@ -281,12 +287,10 @@ fn emit_rule_match(
     service: &ServiceDefinition,
     day: &LiturgicalDay,
     candidate: Option<&ObservanceDefinition>,
-    resources: &BTreeMap<String, Sourced<LiturgicalResourceDefinition>>,
     sections: &mut [PlanSection],
     decisions: &mut Vec<Decision>,
 ) -> Result<(), EngineError> {
     let decision_id = format!("decision-{:04}", decisions.len() + 1);
-    let mut resource_authorities = Vec::new();
     for emission in &rule.emit {
         let section_index = service
             .sections
@@ -296,42 +300,43 @@ fn emit_rule_match(
                 rule: rule.id.clone(),
                 reference: format!("section '{}'", emission.section),
             })?;
-        let slot = service.sections[section_index]
-            .slots
+        let component_index = service.sections[section_index]
+            .components
             .iter()
-            .find(|slot| slot.id == emission.slot)
+            .position(|component| component.id == emission.component)
             .ok_or_else(|| EngineError::InvalidPackReference {
                 rule: rule.id.clone(),
-                reference: format!("slot '{}:{}'", emission.section, emission.slot),
+                reference: format!("component '{}:{}'", emission.section, emission.component),
             })?;
+        let component = &service.sections[section_index].components[component_index];
 
-        if slot.cardinality != SlotCardinality::Many {
-            check_slot_ambiguity(
+        if component.cardinality != Some(ComponentCardinality::Many) {
+            check_component_ambiguity(
                 rule,
                 emission.section.as_str(),
-                emission.slot.as_str(),
-                &sections[section_index],
+                emission.component.as_str(),
+                &sections[section_index].components[component_index],
                 decisions,
             )?;
         }
 
-        let materials = resolve_emission_materials(
-            rule,
-            emission,
-            service,
-            slot.cardinality,
-            day,
-            candidate,
-            resources,
-            &mut resource_authorities,
-        )?;
+        let materials = resolve_emission_materials(rule, emission, service, day, candidate)?;
         for material in materials {
-            sections[section_index].items.push(PlanItem {
-                slot: emission.slot.clone(),
-                count: emission.count,
-                material,
-                decision: decision_id.clone(),
-            });
+            sections[section_index].components[component_index]
+                .materials
+                .push(PlanMaterial {
+                    count: emission.count,
+                    material,
+                    decision: Some(decision_id.clone()),
+                    observance: candidate.map(|observance| observance.id.clone()),
+                });
+        }
+        if !sections[section_index].components[component_index]
+            .materials
+            .is_empty()
+        {
+            sections[section_index].components[component_index].status =
+                PlanComponentStatus::Resolved;
         }
     }
     let mut seen_authorities = BTreeSet::new();
@@ -339,7 +344,6 @@ fn emit_rule_match(
         .authority
         .iter()
         .chain(candidate.into_iter().flat_map(|value| &value.authority))
-        .chain(resource_authorities.iter())
         .filter(|value| seen_authorities.insert(value.as_str()))
         .cloned()
         .collect();
@@ -357,11 +361,8 @@ fn resolve_emission_materials(
     rule: &RuleDefinition,
     emission: &EmissionDefinition,
     service: &ServiceDefinition,
-    slot_cardinality: SlotCardinality,
     day: &LiturgicalDay,
     candidate: Option<&ObservanceDefinition>,
-    resources: &BTreeMap<String, Sourced<LiturgicalResourceDefinition>>,
-    resource_authorities: &mut Vec<String>,
 ) -> Result<Vec<BTreeMap<String, Value>>, EngineError> {
     if let Some(material) = &emission.material {
         return resolve_material(material, day, candidate)
@@ -371,94 +372,69 @@ fn resolve_emission_materials(
                 variable,
             });
     }
-    let appointment =
-        emission
-            .appointment
-            .as_ref()
-            .ok_or_else(|| EngineError::InvalidPackReference {
-                rule: rule.id.clone(),
-                reference: "emission has neither material nor appointment".to_owned(),
-            })?;
-    let observance = candidate.ok_or_else(|| EngineError::MissingAppointment {
-        observance: "<none>".to_owned(),
-        service: service.id.clone(),
-        role: appointment.clone(),
-    })?;
-    let resource_ids = observance
-        .appointments
-        .get(&service.id)
-        .and_then(|appointments| appointments.get(appointment))
-        .ok_or_else(|| EngineError::MissingAppointment {
-            observance: observance.id.clone(),
-            service: service.id.clone(),
-            role: appointment.clone(),
-        })?;
-    if slot_cardinality != SlotCardinality::Many && resource_ids.as_slice().len() != 1 {
-        return Err(EngineError::AppointmentCardinality {
-            observance: observance.id.clone(),
-            service: service.id.clone(),
-            role: appointment.clone(),
-            count: resource_ids.as_slice().len(),
+    if emission.observance != Some(true) {
+        return Err(EngineError::InvalidPackReference {
+            rule: rule.id.clone(),
+            reference: "emission has neither material nor observance source".to_owned(),
         });
     }
-    resource_ids
+    let Some(observance) = candidate else {
+        return Ok(Vec::new());
+    };
+    let Some(selection) = observance
+        .services
+        .get(&service.id)
+        .and_then(|sections| sections.get(&emission.section))
+        .and_then(|components| components.get(&emission.component))
+    else {
+        return Ok(Vec::new());
+    };
+    selection
         .as_slice()
         .iter()
-        .map(|resource_id| {
-            let resource =
-                resources
-                    .get(resource_id)
+        .map(|material_use| {
+            let material = match material_use {
+                MaterialUse::Inline(material) => material,
+                MaterialUse::LocalReference(reference) => observance
+                    .common
+                    .get(
+                        reference
+                            .path
+                            .strip_prefix("common.")
+                            .unwrap_or(&reference.path),
+                    )
                     .ok_or_else(|| EngineError::InvalidPackReference {
                         rule: rule.id.clone(),
-                        reference: format!("liturgical resource '{resource_id}'"),
-                    })?;
-            resource_authorities.extend(resource.value.authority.iter().cloned());
-            Ok(resource_material(&resource.value, observance))
+                        reference: format!("local material '{}'", reference.path),
+                    })?,
+            };
+            resolve_material(material, day, Some(observance)).map_err(|variable| {
+                EngineError::UnknownVariable {
+                    rule: rule.id.clone(),
+                    variable,
+                }
+            })
         })
         .collect()
 }
 
-fn resource_material(
-    resource: &LiturgicalResourceDefinition,
-    observance: &ObservanceDefinition,
-) -> BTreeMap<String, Value> {
-    let mut material = resource.properties.clone();
-    material.insert("source".to_owned(), Value::String("resource".to_owned()));
-    material.insert("resource".to_owned(), Value::String(resource.id.clone()));
-    material.insert("title".to_owned(), Value::String(resource.title.clone()));
-    material.insert("kind".to_owned(), Value::String(resource.kind.clone()));
-    material.insert("role".to_owned(), Value::String(resource.role.clone()));
-    material.insert(
-        "reference".to_owned(),
-        Value::String(resource.reference.url.clone()),
-    );
-    if let Some(accessed) = &resource.reference.accessed {
-        material.insert("accessed".to_owned(), Value::String(accessed.clone()));
-    }
-    material.insert(
-        "observance".to_owned(),
-        Value::String(observance.id.clone()),
-    );
-    material
-}
-
-fn check_slot_ambiguity(
+fn check_component_ambiguity(
     rule: &RuleDefinition,
     section_id: &str,
-    slot_id: &str,
-    section: &PlanSection,
+    component_id: &str,
+    component: &PlanComponent,
     decisions: &[Decision],
 ) -> Result<(), EngineError> {
-    let Some(existing) = section.items.iter().find(|item| item.slot == slot_id) else {
+    let Some(existing) = component.materials.first() else {
         return Ok(());
     };
     let first_rule = decisions
         .iter()
-        .find(|decision| decision.id == existing.decision)
+        .find(|decision| existing.decision.as_ref() == Some(&decision.id))
         .map_or("unknown", |decision| decision.rule.as_str());
-    Err(EngineError::AmbiguousSlot {
+    Err(EngineError::AmbiguousComponent {
         section: section_id.to_owned(),
-        slot: slot_id.to_owned(),
+        component: component_id.to_owned(),
         first_rule: first_rule.to_owned(),
         second_rule: rule.id.clone(),
     })
@@ -693,23 +669,91 @@ fn has_iso_date_shape(value: &str) -> bool {
             .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
 }
 
-fn validate_required_slots(
-    service: &ServiceDefinition,
-    sections: &[PlanSection],
-) -> Result<(), EngineError> {
-    for (section_definition, section) in service.sections.iter().zip(sections) {
-        for slot in &section_definition.slots {
-            if slot.cardinality == SlotCardinality::One
-                && !section.items.iter().any(|item| item.slot == slot.id)
-            {
-                return Err(EngineError::MissingRequiredSlot {
-                    section: section.id.clone(),
-                    slot: slot.id.clone(),
-                });
+fn initialize_sections(service: &ServiceDefinition, form: Option<&str>) -> Vec<PlanSection> {
+    service
+        .sections
+        .iter()
+        .map(|section| PlanSection {
+            id: section.id.clone(),
+            name: section.name.clone(),
+            components: section
+                .components
+                .iter()
+                .map(|component| {
+                    let material = (component.kind == ComponentKind::Fixed).then(|| {
+                        form.and_then(|form_id| component.form_material.get(form_id))
+                            .or(component.material.as_ref())
+                            .expect("validated fixed component has material")
+                            .clone()
+                    });
+                    PlanComponent {
+                        id: component.id.clone(),
+                        name: component.name.clone(),
+                        kind: component.kind,
+                        status: if material.is_some() {
+                            PlanComponentStatus::Resolved
+                        } else {
+                            PlanComponentStatus::Omitted
+                        },
+                        materials: material
+                            .into_iter()
+                            .map(|material| PlanMaterial {
+                                material,
+                                count: None,
+                                decision: None,
+                                observance: None,
+                            })
+                            .collect(),
+                    }
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+fn mark_required_components(
+    pack: &LoadedPack,
+    observances: &[&ObservanceDefinition],
+    service_id: &str,
+    sections: &mut [PlanSection],
+) -> PlanStatus {
+    let mut required = BTreeSet::new();
+    if let Some(service) = pack.services.get(service_id) {
+        for section in &service.value.sections {
+            for component in &section.components {
+                if component.cardinality == Some(ComponentCardinality::One) {
+                    required.insert((section.id.as_str(), component.id.as_str()));
+                }
             }
         }
     }
-    Ok(())
+    for observance in observances {
+        if let Some(profile) = pack
+            .ranks
+            .get(&observance.rank)
+            .and_then(|rank| rank.value.services.get(service_id))
+        {
+            for requirement in &profile.required {
+                required.insert((requirement.section.as_str(), requirement.component.as_str()));
+            }
+        }
+    }
+    let mut unresolved = false;
+    for section in sections {
+        for component in &mut section.components {
+            if required.contains(&(section.id.as_str(), component.id.as_str()))
+                && component.materials.is_empty()
+            {
+                component.status = PlanComponentStatus::Unresolved;
+                unresolved = true;
+            }
+        }
+    }
+    if unresolved {
+        PlanStatus::RequiresReview
+    } else {
+        PlanStatus::Complete
+    }
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -746,32 +790,21 @@ pub enum EngineError {
     UnknownVariable { rule: String, variable: String },
     #[error("rule '{rule}' has invalid validated-pack reference: {reference}")]
     InvalidPackReference { rule: String, reference: String },
-    #[error("observance '{observance}' has no '{role}' appointment for service '{service}'")]
-    MissingAppointment {
-        observance: String,
+    #[error("conflicting service forms '{first}' and '{second}' selected for service '{service}'")]
+    AmbiguousServiceForm {
         service: String,
-        role: String,
+        first: String,
+        second: String,
     },
     #[error(
-        "observance '{observance}' appoints {count} '{role}' resources to exclusive service '{service}' slot"
+        "conflicting emissions for exclusive component {section}:{component} from rules '{first_rule}' and '{second_rule}'"
     )]
-    AppointmentCardinality {
-        observance: String,
-        service: String,
-        role: String,
-        count: usize,
-    },
-    #[error(
-        "conflicting emissions for exclusive slot {section}:{slot} from rules '{first_rule}' and '{second_rule}'"
-    )]
-    AmbiguousSlot {
+    AmbiguousComponent {
         section: String,
-        slot: String,
+        component: String,
         first_rule: String,
         second_rule: String,
     },
-    #[error("required slot {section}:{slot} has no emitted item")]
-    MissingRequiredSlot { section: String, slot: String },
 }
 
 #[derive(Debug, Error)]
@@ -852,6 +885,22 @@ fn resolve_value(
     day: &LiturgicalDay,
     observance: Option<&ObservanceDefinition>,
 ) -> Result<Value, String> {
+    if let Some(object) = value.as_object() {
+        return object
+            .iter()
+            .map(|(key, value)| {
+                resolve_value(value, day, observance).map(|resolved| (key.clone(), resolved))
+            })
+            .collect::<Result<serde_json::Map<String, Value>, _>>()
+            .map(Value::Object);
+    }
+    if let Some(array) = value.as_array() {
+        return array
+            .iter()
+            .map(|value| resolve_value(value, day, observance))
+            .collect::<Result<Vec<_>, _>>()
+            .map(Value::Array);
+    }
     let Some(variable) = value.as_str().filter(|value| value.starts_with('$')) else {
         return Ok(value.clone());
     };

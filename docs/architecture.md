@@ -1,95 +1,60 @@
 # Architecture
 
-## Boundary
-
 ```text
-caller-supplied TraditionResource
-              |
-              v
- YAML parse + JSON Schema validation
-              |
-              v
- typed, reference-checked LoadedPack
-              |
-              v
- deterministic typikon-core evaluation
-              |
-              v
- typed typikon.plan/v0.1 value
+pack + civil date
+       |
+       v
+calendar projection and observance selection
+       |
+       v
+service definition (complete ordered structure)
+       + rank profile (required propers)
+       + observance material (actual propers)
+       + rules (appointment and combination)
+       |
+       v
+typikon.plan/v0.2
 ```
 
-`TraditionResource` supplies relative resource names and bytes. The loader
-includes a memory implementation and, behind its `filesystem` feature, a
-directory implementation. Directory paths are confined to the supplied pack
-root. Other providers (archive, browser fetch result, database, embedded bytes)
-can implement the same interface without changing evaluation.
+The loader parses YAML, validates each document against JSON Schema,
+deserializes typed records, and checks cross-references before evaluation.
+Definition directories are recursive, so file paths can be organized for
+humans while stable IDs remain the semantic keys.
 
-Definition directories are scanned recursively. Packs can therefore keep
-observances in a human-scale taxonomy such as `observances/feasts/major/`,
-`observances/feasts/minor/`, and `observances/saints/<type>/`. An observance's
-stable `id`, rather than its file path, remains the reference key, so moving a
-definition between taxonomy directories does not change compilation behavior.
+## Compilation
 
-Tradition resources are never compiled into `typikon-core`. In this project,
-`typikon-engine`, `typikon-goarch`, `typikon-oca`, and `typikon-antiochian` are
-peer directories so that repository ownership is also visible in the
-filesystem. The JSON Schemas
-are engine contracts and may be embedded in loader artifacts; the GOARCH, OCA,
-and Antiochian data remain external runtime inputs.
+1. Apply the service's `liturgical_day_offset` to the civil date.
+2. Project the liturgical day into the pack's fixed calendar.
+3. Calculate Orthodox Pascha, phase, weekday, and Octoechos tone.
+4. Select observances by `date.fixed` or `date.paschal_offset`, unless the
+   caller explicitly supplies observances.
+5. Match rule predicates against the service, day, and observances.
+6. Select a service form when a rule appoints one; otherwise use the service's
+   default form.
+7. Instantiate every service section and component. Fixed material comes
+   directly from the service definition, including form-specific fixed
+   material such as the Chrysostom or Basil Anaphora.
+8. Admit static cycle material or the bound observance's material into each
+   changeable component named by a matching rule.
+9. Mark empty optional components `omitted`. Mark empty cardinality-one or
+   rank-required components `unresolved`.
+10. Return `complete` only when no required component is unresolved.
 
-## Minimal compilation flow
+Rules do not own feast texts. `observance: true` on an emission means “take
+this observance's material for this same service/section/component.” Missing
+material is not fabricated and is not a compilation exception; it is visible
+in the plan as an unresolved requirement.
 
-1. Resolve the service's `liturgical_day_offset` against the requested civil
-   date.
-2. Project the liturgical date into the pack's Gregorian, Revised Julian, or
-   Julian fixed calendar.
-3. Calculate Orthodox Pascha, the Paschal-cycle phase, and the pack-mapped
-   Octoechos tone when that ordinary cycle is active.
-4. Compute the liturgical weekday.
-5. Use explicitly selected observances, or discover `date.fixed` and
-   `date.paschal_offset` observances from the calculated day.
-6. Match structured `when` and `unless` predicates.
-7. Resolve a rule's static material, or use its appointment role to select the
-   matching service resource from the bound observance.
-8. Expand each appointed resource into self-describing plan material while
-   preserving its official reference and authority records.
-9. Validate every emitted section and slot against the service definition.
-10. Reject collisions in `optional` and `one` slots as ambiguity.
-11. Return component derivations plus combined rule, observance, and resource
-   provenance. A
-   scoped claim links back to the source records from which it was derived.
+The evaluator is deterministic: definitions use ordered maps, service order is
+preserved, selected observances are sorted, and decisions are numbered in
+evaluation order.
 
-Rules and loaded records are held in ordered maps. Observances are sorted, and
-decisions are numbered in deterministic evaluation order.
+## Boundaries
 
-The foreign-language boundary accepts a versioned request JSON document and
-returns a schema-validated plan JSON document. Automatic context discovery is
-recorded as output provenance and does not mutate the caller's recorded input.
+`TraditionResource` abstracts pack bytes. The filesystem implementation is
+confined to the pack root; the memory implementation supports FFI and embedded
+callers. `typikon-core` performs no filesystem or network access.
 
-The date-level facade accepts a target calendar date, derives each service's
-civil start date from `liturgical_day_offset`, and compiles every matching
-service with an empty observance list. It returns a deterministic map of
-individually schema-valid plans keyed by service ID; it introduces no second
-plan contract.
-
-An observance predicate in `when` binds the matching observance for material
-variables and appointment lookup. An appointment emission names a semantic
-role, such as `complete-propers`; the observance maps that role to one or more
-resource IDs under the current service. The loader checks every service,
-resource, role, and authority reference before evaluation. An observance
-predicate in `unless` checks the whole selected
-liturgical context, so the presence of another observance can exclude a rule.
-
-The fixed calendar, Paschalion, and tone cycle are independent pack settings.
-Old Calendar support therefore means `fixed: julian`; it is not a separate
-engine branch and does not change the Julian-based Orthodox Paschalion. See the
-[calendar model](calendar-model.md) for algorithms, evidence, and limits.
-
-## Deliberately deferred
-
-- conjunction, precedence, transfer, vigil, and discretionary-choice models;
-- typed decomposition of whole-service major-feast proper bundles beyond the
-  currently normalized `Lord, I Call` fragment;
-- WebAssembly and mature language-specific wrapper packages.
-
-These are deferred rather than represented by guessed abstractions.
+Authority records remain evidence, not runtime appointments. Dated witnesses
+can test a plan for that date but never become recurring material merely
+because a later civil date selects the same feast.

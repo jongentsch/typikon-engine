@@ -1,9 +1,20 @@
-schema: typikon.service/v0.1
+schema: typikon.service/v0.2
 id: great_vespers
 name: Great Vespers
 liturgical_day_offset: 1
+authority: [test-source]
 sections:
+  - id: opening
+    name: Opening
+    components:
+      - id: blessing
+        name: Blessing
+        kind: fixed
+        material: { kind: fixed_text, title: Blessing }
   - id: lord_i_call
-    slots:
+    name: Lord, I Call
+    components:
       - id: stichera
+        name: Stichera
+        kind: changeable
         cardinality: many

@@ -7,16 +7,16 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use thiserror::Error;
 use typikon_schema::{
-    AuthorityCategory, AuthorityDefinition, LiturgicalResourceDefinition, ObservanceDate,
-    ObservanceDefinition, PackDefinition, RuleDefinition, ServiceDefinition,
+    AuthorityCategory, AuthorityDefinition, ComponentKind, Material, MaterialUse, ObservanceDate,
+    ObservanceDefinition, PackDefinition, RankDefinition, RuleDefinition, ServiceDefinition,
 };
 
 const PACK_JSON_SCHEMA: &str = include_str!("../../../schemas/pack.schema.json");
 const SERVICE_JSON_SCHEMA: &str = include_str!("../../../schemas/service.schema.json");
 const OBSERVANCE_JSON_SCHEMA: &str = include_str!("../../../schemas/observance.schema.json");
+const RANK_JSON_SCHEMA: &str = include_str!("../../../schemas/rank.schema.json");
 const RULE_JSON_SCHEMA: &str = include_str!("../../../schemas/rule.schema.json");
 const AUTHORITY_JSON_SCHEMA: &str = include_str!("../../../schemas/authority.schema.json");
-const RESOURCE_JSON_SCHEMA: &str = include_str!("../../../schemas/resource.schema.json");
 const FFI_RESPONSE_JSON_SCHEMA: &str = include_str!("../../../schemas/ffi-response.schema.json");
 const REQUEST_JSON_SCHEMA: &str = include_str!("../../../schemas/request.schema.json");
 const RESOURCE_BUNDLE_JSON_SCHEMA: &str =
@@ -28,9 +28,9 @@ pub enum SchemaKind {
     Pack,
     Service,
     Observance,
+    Rank,
     Rule,
     Authority,
-    Resource,
     FfiResponse,
     Request,
     ResourceBundle,
@@ -43,9 +43,9 @@ impl SchemaKind {
             Self::Pack => PACK_JSON_SCHEMA,
             Self::Service => SERVICE_JSON_SCHEMA,
             Self::Observance => OBSERVANCE_JSON_SCHEMA,
+            Self::Rank => RANK_JSON_SCHEMA,
             Self::Rule => RULE_JSON_SCHEMA,
             Self::Authority => AUTHORITY_JSON_SCHEMA,
-            Self::Resource => RESOURCE_JSON_SCHEMA,
             Self::FfiResponse => FFI_RESPONSE_JSON_SCHEMA,
             Self::Request => REQUEST_JSON_SCHEMA,
             Self::ResourceBundle => RESOURCE_BUNDLE_JSON_SCHEMA,
@@ -58,9 +58,9 @@ impl SchemaKind {
             Self::Pack => "pack",
             Self::Service => "service",
             Self::Observance => "observance",
+            Self::Rank => "rank",
             Self::Rule => "rule",
             Self::Authority => "authority",
-            Self::Resource => "liturgical resource",
             Self::FfiResponse => "FFI response",
             Self::Request => "request",
             Self::ResourceBundle => "resource bundle",
@@ -260,7 +260,7 @@ pub struct LoadedPack {
     pub pack: Sourced<PackDefinition>,
     pub services: BTreeMap<String, Sourced<ServiceDefinition>>,
     pub observances: BTreeMap<String, Sourced<ObservanceDefinition>>,
-    pub resources: BTreeMap<String, Sourced<LiturgicalResourceDefinition>>,
+    pub ranks: BTreeMap<String, Sourced<RankDefinition>>,
     pub rules: BTreeMap<String, Sourced<RuleDefinition>>,
     pub authorities: BTreeMap<String, Sourced<AuthorityDefinition>>,
 }
@@ -339,11 +339,11 @@ pub fn load_pack(resource: &impl TraditionResource) -> Result<LoadedPack, Loader
         SchemaKind::Observance,
         |value: &ObservanceDefinition| &value.id,
     )?;
-    let resources = load_collection(
+    let ranks = load_collection(
         resource,
-        &pack.value.definitions.resources,
-        SchemaKind::Resource,
-        |value: &LiturgicalResourceDefinition| &value.id,
+        &pack.value.definitions.ranks,
+        SchemaKind::Rank,
+        |value: &RankDefinition| &value.id,
     )?;
     let rules = load_collection(
         resource,
@@ -369,7 +369,7 @@ pub fn load_pack(resource: &impl TraditionResource) -> Result<LoadedPack, Loader
         pack,
         services,
         observances,
-        resources,
+        ranks,
         rules,
         authorities,
     };
@@ -484,25 +484,9 @@ where
 fn validate_references(pack: &LoadedPack) -> Result<(), LoaderError> {
     validate_service_shapes(pack)?;
     validate_authority_graph(pack)?;
-    validate_resource_references(pack)?;
+    validate_rank_references(pack)?;
     validate_observance_dates(pack)?;
     validate_rule_references(pack)
-}
-
-fn validate_resource_references(pack: &LoadedPack) -> Result<(), LoaderError> {
-    for sourced in pack.resources.values() {
-        for authority in &sourced.value.authority {
-            if !pack.authorities.contains_key(authority) {
-                return Err(LoaderError::UnknownReference {
-                    path: sourced.source.clone(),
-                    owner: sourced.value.id.clone(),
-                    kind: "authority",
-                    id: authority.clone(),
-                });
-            }
-        }
-    }
-    Ok(())
 }
 
 fn validate_authority_graph(pack: &LoadedPack) -> Result<(), LoaderError> {
@@ -542,6 +526,34 @@ fn validate_authority_graph(pack: &LoadedPack) -> Result<(), LoaderError> {
 
 fn validate_service_shapes(pack: &LoadedPack) -> Result<(), LoaderError> {
     for sourced in pack.services.values() {
+        validate_authorities(
+            pack,
+            &sourced.source,
+            &sourced.value.id,
+            &sourced.value.authority,
+        )?;
+        let mut forms = BTreeSet::new();
+        for form in &sourced.value.forms {
+            if !forms.insert(form.id.as_str()) {
+                return Err(LoaderError::DuplicateNestedId {
+                    path: sourced.source.clone(),
+                    kind: "service form",
+                    id: form.id.clone(),
+                    owner: sourced.value.id.clone(),
+                });
+            }
+            validate_authorities(pack, &sourced.source, &form.id, &form.authority)?;
+        }
+        if let Some(default_form) = &sourced.value.default_form
+            && !forms.contains(default_form.as_str())
+        {
+            return Err(LoaderError::UnknownReference {
+                path: sourced.source.clone(),
+                owner: sourced.value.id.clone(),
+                kind: "service form",
+                id: default_form.clone(),
+            });
+        }
         let mut sections = BTreeMap::<&str, &str>::new();
         for section in &sourced.value.sections {
             if sections.insert(&section.id, &sourced.source).is_some() {
@@ -552,14 +564,113 @@ fn validate_service_shapes(pack: &LoadedPack) -> Result<(), LoaderError> {
                     owner: sourced.value.id.clone(),
                 });
             }
-            let mut slots = BTreeSet::<&str>::new();
-            for slot in &section.slots {
-                if !slots.insert(&slot.id) {
+            let mut components = BTreeSet::<&str>::new();
+            for component in &section.components {
+                if !components.insert(&component.id) {
                     return Err(LoaderError::DuplicateNestedId {
                         path: sourced.source.clone(),
-                        kind: "slot",
-                        id: slot.id.clone(),
+                        kind: "component",
+                        id: component.id.clone(),
                         owner: format!("{}:{}", sourced.value.id, section.id),
+                    });
+                }
+                match component.kind {
+                    ComponentKind::Fixed => {
+                        if component.material.is_none()
+                            || component.cardinality.is_some()
+                            || !component.accepts.is_empty()
+                        {
+                            return Err(LoaderError::Schema {
+                                path: sourced.source.clone(),
+                                kind: "service",
+                                message: format!(
+                                    "fixed component '{}:{}' requires material and cannot have cardinality",
+                                    section.id, component.id
+                                ),
+                            });
+                        }
+                    }
+                    ComponentKind::Changeable => {
+                        if component.cardinality.is_none()
+                            || component.material.is_some()
+                            || !component.form_material.is_empty()
+                        {
+                            return Err(LoaderError::Schema {
+                                path: sourced.source.clone(),
+                                kind: "service",
+                                message: format!(
+                                    "changeable component '{}:{}' requires cardinality and cannot contain fixed material",
+                                    section.id, component.id
+                                ),
+                            });
+                        }
+                    }
+                }
+                if let Some(material) = &component.material {
+                    validate_material(pack, &sourced.source, &component.id, material)?;
+                }
+                for (form_id, material) in &component.form_material {
+                    if !forms.contains(form_id.as_str()) {
+                        return Err(LoaderError::UnknownReference {
+                            path: sourced.source.clone(),
+                            owner: component.id.clone(),
+                            kind: "service form",
+                            id: form_id.clone(),
+                        });
+                    }
+                    validate_material(pack, &sourced.source, &component.id, material)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_rank_references(pack: &LoadedPack) -> Result<(), LoaderError> {
+    for sourced in pack.ranks.values() {
+        let rank = &sourced.value;
+        validate_authorities(pack, &sourced.source, &rank.id, &rank.authority)?;
+        for (service_id, profile) in &rank.services {
+            let service =
+                pack.services
+                    .get(service_id)
+                    .ok_or_else(|| LoaderError::UnknownReference {
+                        path: sourced.source.clone(),
+                        owner: rank.id.clone(),
+                        kind: "service",
+                        id: service_id.clone(),
+                    })?;
+            let mut requirements = BTreeSet::new();
+            for requirement in &profile.required {
+                if !requirements.insert((&requirement.section, &requirement.component)) {
+                    return Err(LoaderError::Schema {
+                        path: sourced.source.clone(),
+                        kind: "rank",
+                        message: format!(
+                            "duplicate requirement '{}:{}' for service '{}'",
+                            requirement.section, requirement.component, service_id
+                        ),
+                    });
+                }
+                let component =
+                    find_component(&service.value, &requirement.section, &requirement.component)
+                        .ok_or_else(|| LoaderError::UnknownReference {
+                            path: sourced.source.clone(),
+                            owner: rank.id.clone(),
+                            kind: "service component",
+                            id: format!(
+                                "{service_id}:{}:{}",
+                                requirement.section, requirement.component
+                            ),
+                        })?;
+                if component.kind != ComponentKind::Changeable {
+                    return Err(LoaderError::Schema {
+                        path: sourced.source.clone(),
+                        kind: "rank",
+                        message: format!(
+                            "rank requirement '{service_id}:{}:{}' is not changeable",
+                            requirement.section, requirement.component
+                        ),
                     });
                 }
             }
@@ -570,44 +681,77 @@ fn validate_service_shapes(pack: &LoadedPack) -> Result<(), LoaderError> {
 
 fn validate_observance_dates(pack: &LoadedPack) -> Result<(), LoaderError> {
     for sourced in pack.observances.values() {
-        for authority in &sourced.value.authority {
-            if !pack.authorities.contains_key(authority) {
-                return Err(LoaderError::UnknownReference {
-                    path: sourced.source.clone(),
-                    owner: sourced.value.id.clone(),
-                    kind: "authority",
-                    id: authority.clone(),
-                });
-            }
+        let observance = &sourced.value;
+        validate_authorities(pack, &sourced.source, &observance.id, &observance.authority)?;
+        if !pack.ranks.contains_key(&observance.rank) {
+            return Err(LoaderError::UnknownReference {
+                path: sourced.source.clone(),
+                owner: observance.id.clone(),
+                kind: "rank",
+                id: observance.rank.clone(),
+            });
         }
-        for (service_id, appointments) in &sourced.value.appointments {
-            if !pack.services.contains_key(service_id) {
-                return Err(LoaderError::UnknownReference {
-                    path: sourced.source.clone(),
-                    owner: sourced.value.id.clone(),
-                    kind: "appointment service",
-                    id: service_id.clone(),
-                });
-            }
-            for (role, resource_ids) in appointments {
-                for resource_id in resource_ids.as_slice() {
-                    let resource = pack.resources.get(resource_id).ok_or_else(|| {
-                        LoaderError::UnknownReference {
-                            path: sourced.source.clone(),
-                            owner: sourced.value.id.clone(),
-                            kind: "liturgical resource",
-                            id: resource_id.clone(),
-                        }
+        for (id, material) in &observance.common {
+            validate_material(pack, &sourced.source, id, material)?;
+        }
+        for (service_id, sections) in &observance.services {
+            let service =
+                pack.services
+                    .get(service_id)
+                    .ok_or_else(|| LoaderError::UnknownReference {
+                        path: sourced.source.clone(),
+                        owner: observance.id.clone(),
+                        kind: "service",
+                        id: service_id.clone(),
                     })?;
-                    if resource.value.role != *role {
+            for (section_id, components) in sections {
+                for (component_id, selection) in components {
+                    let component = find_component(&service.value, section_id, component_id)
+                        .ok_or_else(|| LoaderError::UnknownReference {
+                            path: sourced.source.clone(),
+                            owner: observance.id.clone(),
+                            kind: "service component",
+                            id: format!("{service_id}:{section_id}:{component_id}"),
+                        })?;
+                    if component.kind != ComponentKind::Changeable {
                         return Err(LoaderError::Schema {
                             path: sourced.source.clone(),
                             kind: "observance",
                             message: format!(
-                                "appointment role '{role}' does not match resource '{}' role '{}'",
-                                resource.value.id, resource.value.role
+                                "observance material targets fixed component '{service_id}:{section_id}:{component_id}'"
                             ),
                         });
+                    }
+                    for material_use in selection.as_slice() {
+                        match material_use {
+                            MaterialUse::LocalReference(reference) => {
+                                let id = reference
+                                    .path
+                                    .strip_prefix("common.")
+                                    .unwrap_or(&reference.path);
+                                if !observance.common.contains_key(id) {
+                                    return Err(LoaderError::UnknownReference {
+                                        path: sourced.source.clone(),
+                                        owner: observance.id.clone(),
+                                        kind: "local material",
+                                        id: reference.path.clone(),
+                                    });
+                                }
+                            }
+                            MaterialUse::Inline(material) => {
+                                validate_material(pack, &sourced.source, component_id, material)?;
+                            }
+                        }
+                        let material = resolve_material(observance, material_use)
+                            .expect("local references checked");
+                        validate_component_material_role(
+                            &sourced.source,
+                            "observance",
+                            service_id,
+                            section_id,
+                            component,
+                            material,
+                        )?;
                     }
                 }
             }
@@ -678,33 +822,157 @@ fn validate_rule_references(pack: &LoadedPack) -> Result<(), LoaderError> {
             }
         }
 
+        if let Some(form) = &rule.select_form
+            && !service
+                .value
+                .forms
+                .iter()
+                .any(|candidate| candidate.id == *form)
+        {
+            return Err(LoaderError::UnknownReference {
+                path: sourced.source.clone(),
+                owner: rule.id.clone(),
+                kind: "service form",
+                id: form.clone(),
+            });
+        }
+
         for emission in &rule.emit {
-            if emission.appointment.is_some() && rule.when.observance.is_none() {
+            if emission.observance.is_some() && rule.when.observance.is_none() {
                 return Err(LoaderError::Schema {
                     path: sourced.source.clone(),
                     kind: "rule",
-                    message: "appointment emissions require when.observance".to_owned(),
+                    message: "observance emissions require when.observance".to_owned(),
                 });
             }
-            let section = service
-                .value
-                .sections
-                .iter()
-                .find(|section| section.id == emission.section)
+            let component = find_component(&service.value, &emission.section, &emission.component)
                 .ok_or_else(|| LoaderError::UnknownReference {
                     path: sourced.source.clone(),
                     owner: rule.id.clone(),
-                    kind: "section",
-                    id: emission.section.clone(),
+                    kind: "service component",
+                    id: format!("{}:{}", emission.section, emission.component),
                 })?;
-            if !section.slots.iter().any(|slot| slot.id == emission.slot) {
-                return Err(LoaderError::UnknownReference {
+            if component.kind != ComponentKind::Changeable {
+                return Err(LoaderError::Schema {
                     path: sourced.source.clone(),
-                    owner: rule.id.clone(),
-                    kind: "slot",
-                    id: format!("{}:{}", emission.section, emission.slot),
+                    kind: "rule",
+                    message: format!(
+                        "rule emission targets fixed component '{}:{}'",
+                        emission.section, emission.component
+                    ),
                 });
             }
+            if let Some(material) = &emission.material {
+                validate_material(pack, &sourced.source, &rule.id, material)?;
+                validate_component_material_role(
+                    &sourced.source,
+                    "rule",
+                    service_id,
+                    &emission.section,
+                    component,
+                    material,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn find_component<'a>(
+    service: &'a ServiceDefinition,
+    section: &str,
+    component: &str,
+) -> Option<&'a typikon_schema::ServiceComponentDefinition> {
+    service
+        .sections
+        .iter()
+        .find(|candidate| candidate.id == section)?
+        .components
+        .iter()
+        .find(|candidate| candidate.id == component)
+}
+
+fn resolve_material<'a>(
+    observance: &'a ObservanceDefinition,
+    material_use: &'a MaterialUse,
+) -> Option<&'a Material> {
+    match material_use {
+        MaterialUse::Inline(material) => Some(material),
+        MaterialUse::LocalReference(reference) => observance.common.get(
+            reference
+                .path
+                .strip_prefix("common.")
+                .unwrap_or(&reference.path),
+        ),
+    }
+}
+
+fn validate_material(
+    pack: &LoadedPack,
+    path: &str,
+    owner: &str,
+    material: &Material,
+) -> Result<(), LoaderError> {
+    if let Some(authorities) = material.get("authority").and_then(Value::as_array) {
+        for authority in authorities.iter().filter_map(Value::as_str) {
+            if !pack.authorities.contains_key(authority) {
+                return Err(LoaderError::UnknownReference {
+                    path: path.to_owned(),
+                    owner: owner.to_owned(),
+                    kind: "authority",
+                    id: authority.to_owned(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_component_material_role(
+    path: &str,
+    kind: &'static str,
+    service_id: &str,
+    section_id: &str,
+    component: &typikon_schema::ServiceComponentDefinition,
+    material: &Material,
+) -> Result<(), LoaderError> {
+    if component.accepts.is_empty() {
+        return Ok(());
+    }
+    let role = material.get("role").and_then(Value::as_str).ok_or_else(|| LoaderError::Schema {
+        path: path.to_owned(), kind, message: format!(
+            "material for '{service_id}:{section_id}:{}' must declare one of the accepted roles",
+            component.id
+        )
+    })?;
+    if component.accepts.iter().any(|accepted| accepted == role) {
+        Ok(())
+    } else {
+        Err(LoaderError::Schema {
+            path: path.to_owned(),
+            kind,
+            message: format!(
+                "material role '{role}' is not accepted by '{service_id}:{section_id}:{}'",
+                component.id
+            ),
+        })
+    }
+}
+
+fn validate_authorities(
+    pack: &LoadedPack,
+    path: &str,
+    owner: &str,
+    authorities: &[String],
+) -> Result<(), LoaderError> {
+    for authority in authorities {
+        if !pack.authorities.contains_key(authority) {
+            return Err(LoaderError::UnknownReference {
+                path: path.to_owned(),
+                owner: owner.to_owned(),
+                kind: "authority",
+                id: authority.clone(),
+            });
         }
     }
     Ok(())
@@ -738,8 +1006,8 @@ fn has_yaml_extension(path: &Path) -> bool {
 mod tests {
     use super::*;
     use typikon_schema::{
-        AUTHORITY_SCHEMA, FFI_RESPONSE_SCHEMA, OBSERVANCE_SCHEMA, PACK_SCHEMA, REQUEST_SCHEMA,
-        RESOURCE_BUNDLE_SCHEMA, RESOURCE_SCHEMA, RULE_SCHEMA, SERVICE_SCHEMA,
+        AUTHORITY_SCHEMA, FFI_RESPONSE_SCHEMA, OBSERVANCE_SCHEMA, PACK_SCHEMA, PLAN_SCHEMA,
+        RANK_SCHEMA, REQUEST_SCHEMA, RESOURCE_BUNDLE_SCHEMA, RULE_SCHEMA, SERVICE_SCHEMA,
     };
 
     #[test]
@@ -757,12 +1025,13 @@ mod tests {
             (SchemaKind::Pack, PACK_SCHEMA),
             (SchemaKind::Service, SERVICE_SCHEMA),
             (SchemaKind::Observance, OBSERVANCE_SCHEMA),
+            (SchemaKind::Rank, RANK_SCHEMA),
             (SchemaKind::Rule, RULE_SCHEMA),
             (SchemaKind::Authority, AUTHORITY_SCHEMA),
-            (SchemaKind::Resource, RESOURCE_SCHEMA),
             (SchemaKind::FfiResponse, FFI_RESPONSE_SCHEMA),
             (SchemaKind::Request, REQUEST_SCHEMA),
             (SchemaKind::ResourceBundle, RESOURCE_BUNDLE_SCHEMA),
+            (SchemaKind::Plan, PLAN_SCHEMA),
         ];
         for (kind, expected) in expectations {
             let schema: Value = serde_json::from_str(kind.document_schema()).unwrap();
